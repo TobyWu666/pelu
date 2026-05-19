@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+DerivedData/
+build-release/
+build/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+node_modules/
+.wrangler/
+.dev.vars
+package-lock.json
+Apps/PeluMac/PeluMacConfig.swift
