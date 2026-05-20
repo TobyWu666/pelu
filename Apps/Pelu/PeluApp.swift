@@ -17,6 +17,8 @@ struct PeluApp: App {
                     TabView {
                         PeluDashboardScreen()
                             .tabItem { Label("用量", systemImage: "waveform.path.ecg") }
+                        PeluHistoryScreen()
+                            .tabItem { Label("歷史", systemImage: "calendar") }
                         PeluSettingsScreen()
                             .tabItem { Label("設定", systemImage: "gearshape") }
                     }

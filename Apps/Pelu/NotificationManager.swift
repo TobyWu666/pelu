@@ -86,6 +86,10 @@ enum UsageSurfaceUpdater {
         let aggregate = try await syncer.fetchAllMacs()
 
         try? AppGroupStore()?.save(aggregate)
+        // Local-only history: record once per fetch. The store keeps one
+        // entry per calendar day, so the natural midnight rollover gives us
+        // "yesterday's final reading" automatically.
+        try? UsageHistoryStore()?.record(aggregate)
         WidgetCenter.shared.reloadAllTimelines()
 
         // Live Activity tracks the primary Mac (alphabetically first label).
