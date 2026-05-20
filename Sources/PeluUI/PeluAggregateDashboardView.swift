@@ -43,13 +43,17 @@ public struct PeluAggregateDashboardView: View {
     /// Hero greeting at the top of the dashboard. Refreshes itself every minute
     /// via TimelineView so the time-of-day wording stays accurate even if the
     /// user keeps the app open across a boundary (e.g. 17:59 → 18:00).
+    ///
+    /// Type styled with `.serif` design (New York on Apple platforms) to echo
+    /// the Tiempos-style serif Claude.ai uses for its hero greetings.
     private var greetingHero: some View {
         TimelineView(.everyMinute) { context in
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent))
-                    .font(.title2.weight(.semibold))
+                    .font(.system(.title, design: .serif, weight: .regular))
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(subheading)
                     .font(.subheadline)
                     .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
