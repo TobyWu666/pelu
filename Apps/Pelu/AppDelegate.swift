@@ -1,3 +1,4 @@
+import CloudKit
 import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
@@ -5,6 +6,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Required for CKQuerySubscription delivery — iOS needs an APNs device token
+        // to route CloudKit silent pushes. No prompt is shown to the user; this only
+        // works at all because the app entitlement includes `aps-environment`.
+        application.registerForRemoteNotifications()
         return true
     }
 
@@ -12,16 +17,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        Task { @MainActor in
-            NotificationManager.shared.didRegister(deviceToken: deviceToken)
-        }
+        // We don't ship the token anywhere — CloudKit manages routing internally.
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        // 取不到 APNs token 不阻擋 app 啟動，使用者下次切換 toggle 時會再試。
+        NSLog("Pelu APNs registration failed: \(error)")
     }
 
     func application(
@@ -29,9 +32,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        // Only react to Pelu's own background pushes — ignore any other push that may
-        // be added later. The Worker tags refresh pushes with `peluRefresh = 1`.
-        guard let refresh = userInfo["peluRefresh"], "\(refresh)" != "0" else {
+        // CloudKit subscriptions deliver notifications shaped like
+        // { "ck": { ...subscription metadata... } }. Anything not parseable
+        // as a CKNotification isn't for us — could be a future push from another
+        // subsystem we add later.
+        guard let _ = CKNotification(fromRemoteNotificationDictionary: userInfo) else {
             completionHandler(.noData)
             return
         }
@@ -43,7 +48,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 )
                 completionHandler(.newData)
             } catch {
-                NSLog("Pelu silent push fetch failed: \(error)")
+                NSLog("Pelu CloudKit fetch failed: \(error)")
                 completionHandler(.failed)
             }
         }

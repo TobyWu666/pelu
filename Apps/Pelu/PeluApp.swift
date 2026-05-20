@@ -5,7 +5,6 @@ import SwiftUI
 @main
 struct PeluApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var auth = AppAuth.shared
     @State private var showSplash = true
     @State private var splashOpacity = 1.0
     @State private var didScheduleSplash = false
@@ -13,17 +12,11 @@ struct PeluApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                if auth.isPaired {
-                    TabView {
-                        PeluDashboardScreen()
-                            .tabItem { Label("用量", systemImage: "waveform.path.ecg") }
-                        PeluSettingsScreen()
-                            .tabItem { Label("設定", systemImage: "gearshape") }
-                    }
-                    .transition(.opacity)
-                } else {
-                    PeluPairingScreen(auth: auth)
-                        .transition(.opacity)
+                TabView {
+                    PeluDashboardScreen()
+                        .tabItem { Label("用量", systemImage: "waveform.path.ecg") }
+                    PeluSettingsScreen()
+                        .tabItem { Label("設定", systemImage: "gearshape") }
                 }
 
                 if showSplash {
@@ -33,7 +26,6 @@ struct PeluApp: App {
                         .zIndex(1)
                 }
             }
-            .animation(.easeInOut(duration: 0.35), value: auth.isPaired)
             .onAppear {
                 guard !didScheduleSplash else { return }
                 didScheduleSplash = true
@@ -47,11 +39,9 @@ struct PeluApp: App {
                 }
             }
             .task {
-                // 每次啟動都註冊 APNs（silent push 不需要 UI 權限，但需要這個 token）
-                // 這樣 Widget 才能靠背景 silent push 自動更新。
-                // 配對完成前 token 沒人會用，但先拿到備著。
+                // 設定頁 toggle 已開時自動續展 UNNotification 授權狀態。
+                // CloudKit subscription 在 PeluDashboardScreen.task 註冊，跟 UI 渲染同時做。
                 let manager = NotificationManager.shared
-                manager.ensureDeviceRegistered()
                 await manager.refreshAuthorizationStatus()
                 if manager.lowQuotaEnabled || manager.resetEnabled {
                     await manager.requestAuthorizationIfNeeded()

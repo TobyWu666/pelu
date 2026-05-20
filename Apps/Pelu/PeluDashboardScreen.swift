@@ -8,6 +8,10 @@ struct PeluDashboardScreen: View {
     @State private var isRefreshing = false
     @State private var errorMessage: String?
 
+    private static let syncer = CloudKitSyncer(
+        bundleVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    )
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
@@ -22,8 +26,15 @@ struct PeluDashboardScreen: View {
             }
             .navigationTitle("Pelu")
             .navigationBarTitleDisplayMode(.inline)
-            .task { await refresh() }
-            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            .task {
+                // Subscribe once on first appearance; CKQuerySubscription handles
+                // background updates afterwards. The fetch follows.
+                try? await Self.syncer.ensureSubscriptionRegistered()
+                await refresh()
+            }
+            // Polling is just a fallback in case the subscription push is throttled.
+            // CloudKit + Apple's APNs is usually <10s, so 5 minutes is plenty.
+            .onReceive(Timer.publish(every: 300, on: .main, in: .common).autoconnect()) { _ in
                 Task { await refresh() }
             }
             .onChange(of: liveActivityEnabled) { _, enabled in
@@ -49,8 +60,10 @@ struct PeluDashboardScreen: View {
                 updateLiveActivity: liveActivityEnabled
             )
             errorMessage = nil
+        } catch UsageSurfaceUpdater.UpdaterError.accountUnavailable(let status) {
+            errorMessage = CloudKitAccountChecker.displayMessage(for: status)
         } catch {
-            errorMessage = "無法取得資料，請確認 Mac app 是否開啟並連線正常。"
+            errorMessage = "暫時取不到資料，請確認 Mac 已開啟 Pelu。"
         }
     }
 

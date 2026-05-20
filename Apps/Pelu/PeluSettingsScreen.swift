@@ -9,32 +9,22 @@ struct PeluSettingsScreen: View {
 
     @StateObject private var notifications = NotificationManager.shared
     @State private var permissionDeniedAlert = false
-
-    @State private var confirmUnpair = false
+    @State private var iCloudStatus: CloudKitAccountChecker.Result = .unknown(underlying: "checking")
 
     var body: some View {
         NavigationStack {
             Form {
                 brandSection
+                iCloudSection
                 notificationsSection
                 liveActivitySection
-                pairingSection
                 aboutSection
             }
             .navigationTitle("設定")
-            .confirmationDialog(
-                "解除配對？",
-                isPresented: $confirmUnpair,
-                titleVisibility: .visible
-            ) {
-                Button("解除配對", role: .destructive) {
-                    AppAuth.shared.reset()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("解除後需要重新從 Mac 取得配對碼。")
+            .task {
+                await notifications.refreshAuthorizationStatus()
+                iCloudStatus = await CloudKitAccountChecker().status()
             }
-            .task { await notifications.refreshAuthorizationStatus() }
             .alert("通知權限被拒絕", isPresented: $permissionDeniedAlert) {
                 Button("前往設定") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -110,24 +100,39 @@ struct PeluSettingsScreen: View {
         }
     }
 
-    private var pairingSection: some View {
+    private var iCloudSection: some View {
         Section {
-            Button(role: .destructive) {
-                confirmUnpair = true
-            } label: {
-                Label("解除配對", systemImage: "iphone.slash")
+            HStack {
+                Image(systemName: iCloudIconName)
+                    .foregroundStyle(iCloudColor)
+                Text(CloudKitAccountChecker.displayMessage(for: iCloudStatus))
+                    .font(.callout)
             }
         } header: {
-            Text("配對")
-        } footer: {
-            Text("解除後 app 會回到配對畫面，需要再從 Mac 取得 6 位數配對碼。")
+            Text("iCloud 同步")
+        }
+    }
+
+    private var iCloudIconName: String {
+        switch iCloudStatus {
+        case .available: return "icloud.fill"
+        case .noAccount, .restricted: return "icloud.slash"
+        case .unknown, .unexpected: return "icloud"
+        }
+    }
+
+    private var iCloudColor: Color {
+        switch iCloudStatus {
+        case .available: return .green
+        case .noAccount, .restricted: return .orange
+        case .unknown, .unexpected: return .secondary
         }
     }
 
     private var aboutSection: some View {
         Section("關於") {
-            LabeledContent("版本", value: "0.1.0")
-            LabeledContent("後端", value: "pelu.tobywu.org")
+            LabeledContent("版本", value: "1.0.0")
+            LabeledContent("資料儲存位置", value: "你的 iCloud")
             LabeledContent("Bundle ID", value: "org.tobywu.pelu")
         }
     }
@@ -138,30 +143,25 @@ struct PeluSettingsScreen: View {
     }
 
     private func handleToggleChange(_ kind: NotificationKind, enabled: Bool) async {
-        // 同步寫到 NotificationManager 給上傳邏輯用
         switch kind {
         case .lowQuota: NotificationManager.shared.lowQuotaEnabled = enabled
         case .reset:    NotificationManager.shared.resetEnabled    = enabled
         }
 
-        if enabled {
-            let granted = await NotificationManager.shared.requestAuthorizationIfNeeded()
-            if !granted {
-                // 權限被拒：回滾 UI 與 manager 狀態
-                switch kind {
-                case .lowQuota:
-                    lowQuotaEnabled = false
-                    NotificationManager.shared.lowQuotaEnabled = false
-                case .reset:
-                    resetEnabled = false
-                    NotificationManager.shared.resetEnabled = false
-                }
-                permissionDeniedAlert = true
-                return
-            }
-        }
+        guard enabled else { return }
 
-        await NotificationManager.shared.uploadPreferences()
+        let granted = await NotificationManager.shared.requestAuthorizationIfNeeded()
+        if !granted {
+            switch kind {
+            case .lowQuota:
+                lowQuotaEnabled = false
+                NotificationManager.shared.lowQuotaEnabled = false
+            case .reset:
+                resetEnabled = false
+                NotificationManager.shared.resetEnabled = false
+            }
+            permissionDeniedAlert = true
+        }
     }
 }
 

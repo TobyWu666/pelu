@@ -92,16 +92,3 @@ public final class KeychainSecretStore: @unchecked Sendable {
     #endif
 }
 
-extension KeychainSecretStore {
-    /// Canonical account names shared across iOS / Mac targets.
-    public enum Account {
-        /// Per-device API token used by the iPhone to call the Worker. Issued by
-        /// the pairing flow. Absence triggers the pairing screen on launch.
-        public static let pairToken = "pelu.pairToken"
-
-        /// Admin shared secret used by the Mac to upload usage. Seeded once from
-        /// the gitignored PeluMacConfig.swift on first launch, then used
-        /// exclusively from Keychain.
-        public static let adminSecret = "pelu.adminSecret"
-    }
-}

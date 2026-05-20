@@ -1,7 +1,7 @@
 import Foundation
 
-/// One Mac's latest reading. The Worker stores these in KV keyed by `macId`
-/// and returns an `AggregateSnapshot` to the iPhone.
+/// One Mac's latest reading. Persisted to CloudKit as a `MacSnapshot` record
+/// keyed by `mac-{macId}`; iPhone fetches and groups them into `AggregateSnapshot`.
 public struct MacSnapshot: Codable, Equatable, Sendable, Identifiable {
     public let macId: String
     public let label: String
@@ -16,9 +16,9 @@ public struct MacSnapshot: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// What the iPhone receives from `GET /usage`. The order is stable
-/// (alphabetical by label), so the first entry is the "primary" Mac
-/// rendered in widgets / Live Activity.
+/// What the iPhone aggregates after fetching all `MacSnapshot` records from
+/// CloudKit. The order is stable (alphabetical by label), so the first entry
+/// is the "primary" Mac rendered in Widget / Live Activity.
 public struct AggregateSnapshot: Codable, Equatable, Sendable {
     public let macs: [MacSnapshot]
 

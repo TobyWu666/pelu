@@ -130,7 +130,7 @@ struct CodexJSONLReader {
 // MARK: - UsageMonitor
 
 /// Reads ~/.claude/usag-status.json and ~/.codex/sessions JSONL files,
-/// watches Claude file for changes via DispatchSource, and uploads to Cloudflare.
+/// watches Claude file for changes via DispatchSource, and uploads to CloudKit.
 @Observable
 final class UsageMonitor: @unchecked Sendable {
     private(set) var snapshot: UsageSnapshot = .demo()
@@ -226,74 +226,14 @@ final class UsageMonitor: @unchecked Sendable {
     }
 }
 
-// MARK: - Pairing
-
-@MainActor
-@Observable
-final class PairingCoordinator {
-    var code: String?
-    var expiresAt: Date?
-    var isWorking = false
-    var lastError: String?
-
-    private let keychain = KeychainSecretStore(service: PeluMacConfig.keychainService)
-
-    /// Resolve the admin secret: Keychain first, otherwise bootstrap from
-    /// PeluMacConfig and persist. Migrating to Keychain on first run removes the
-    /// runtime dependency on the gitignored Swift constant.
-    func resolveAdminSecret() -> String {
-        if let stored = try? keychain.get(account: KeychainSecretStore.Account.adminSecret),
-           !stored.isEmpty {
-            return stored
-        }
-        try? keychain.set(PeluMacConfig.bootstrapSecret, account: KeychainSecretStore.Account.adminSecret)
-        return PeluMacConfig.bootstrapSecret
-    }
-
-    func startPairing() {
-        guard !isWorking else { return }
-        isWorking = true
-        lastError = nil
-        let secret = resolveAdminSecret()
-
-        Task {
-            defer { isWorking = false }
-            do {
-                var request = URLRequest(url: PeluMacConfig.pairCreateEndpoint)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue("Bearer \(secret)", forHTTPHeaderField: "Authorization")
-                request.httpBody = "{}".data(using: .utf8)
-
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                    lastError = "配對 server 回傳錯誤"
-                    return
-                }
-                struct PairResponse: Decodable { let code: String; let expiresAt: Double }
-                let decoded = try JSONDecoder().decode(PairResponse.self, from: data)
-                code = decoded.code
-                expiresAt = Date(timeIntervalSince1970: decoded.expiresAt / 1000)
-            } catch {
-                lastError = error.localizedDescription
-            }
-        }
-    }
-
-    func clear() {
-        code = nil
-        expiresAt = nil
-        lastError = nil
-    }
-}
-
 // MARK: - App
 
 @main
 struct PeluMacApp: App {
     @State private var monitor = UsageMonitor()
-    @State private var pairing = PairingCoordinator()
-    @State private var pairingSheetVisible = false
+    @State private var syncer = CloudKitSyncer(
+        bundleVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    )
 
     var body: some Scene {
         MenuBarExtra {
@@ -305,9 +245,6 @@ struct PeluMacApp: App {
                     .padding(.horizontal, 18)
                     .padding(.bottom, 16)
             }
-            .sheet(isPresented: $pairingSheetVisible) {
-                PairingSheet(pairing: pairing)
-            }
         } label: {
             menuBarLabel
         }
@@ -315,9 +252,6 @@ struct PeluMacApp: App {
         .onChange(of: monitor.snapshot) { _, newSnapshot in
             guard newSnapshot.source != .demo else { return }
             saveToAppGroup(newSnapshot)
-            // Always upload so iPhone sees a fresh "last updated" timestamp every minute.
-            // The Worker still gates APNs pushes by metric-diff (dispatchPushes), so quota
-            // is only spent on real changes — but `latest` in KV stays current.
             uploadSnapshotToCloud(newSnapshot)
         }
     }
@@ -369,17 +303,6 @@ struct PeluMacApp: App {
 
             Spacer()
 
-            Button {
-                pairing.clear()
-                pairing.startPairing()
-                pairingSheetVisible = true
-            } label: {
-                Image(systemName: "iphone.gen3")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("配對新的 iPhone")
-
             Text(UpdatedAtFormatter.string(from: monitor.snapshot.generatedAt))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -411,67 +334,17 @@ struct PeluMacApp: App {
     }
 
     private func uploadSnapshotToCloud(_ snapshot: UsageSnapshot) {
-        let secret = pairing.resolveAdminSecret()
-        let macId = MacIdentity.macId()
-        let label = MacIdentity.label()
-        let client = CloudUsageClient(
-            endpoint: PeluMacConfig.usageEndpoint,
-            sharedSecret: secret
+        let mac = MacSnapshot(
+            macId: MacIdentity.macId(),
+            label: MacIdentity.label(),
+            snapshot: snapshot
         )
         Task {
             do {
-                try await client.upload(macId: macId, label: label, snapshot: snapshot)
+                try await syncer.save(mac)
             } catch {
-                print("Pelu cloud upload failed: \(error)")
+                print("Pelu CloudKit save failed: \(error)")
             }
         }
-    }
-}
-
-// MARK: - Pairing Sheet
-
-private struct PairingSheet: View {
-    let pairing: PairingCoordinator
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("配對新的 iPhone")
-                .font(.title3.weight(.semibold))
-
-            if pairing.isWorking {
-                ProgressView().controlSize(.regular)
-            } else if let code = pairing.code {
-                Text(formatted(code))
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .tracking(6)
-
-                if let expiresAt = pairing.expiresAt {
-                    Text("有效到 \(expiresAt.formatted(date: .omitted, time: .standard))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("在 iPhone Pelu 開啟「配對」並輸入這 6 位數字")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            } else if let lastError = pairing.lastError {
-                Text(lastError).foregroundStyle(.red).font(.callout)
-                Button("重試") { pairing.startPairing() }
-            }
-
-            Button("關閉") { dismiss() }
-                .keyboardShortcut(.escape, modifiers: [])
-        }
-        .padding(28)
-        .frame(width: 320)
-    }
-
-    private func formatted(_ code: String) -> String {
-        guard code.count == 6 else { return code }
-        let mid = code.index(code.startIndex, offsetBy: 3)
-        return code[code.startIndex..<mid] + " " + code[mid...]
     }
 }

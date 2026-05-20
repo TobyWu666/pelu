@@ -5,7 +5,7 @@ import PeluCore
 /// stored in the macOS Keychain so it survives reinstalls. `label` is the
 /// human-readable hostname (e.g. "Toby's MacBook Pro"), fetched lazily.
 enum MacIdentity {
-    private static let keychain = KeychainSecretStore(service: PeluMacConfig.keychainService)
+    private static let keychain = KeychainSecretStore(service: "org.tobywu.pelu.mac")
     private static let macIdAccount = "pelu.macId"
 
     /// Persistent per-machine UUID. Created on first call.

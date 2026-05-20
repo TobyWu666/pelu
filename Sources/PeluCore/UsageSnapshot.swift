@@ -18,10 +18,10 @@ public struct UsageSnapshot: Codable, Equatable, Sendable, Identifiable {
         self.metrics = metrics
     }
 
-    // The Worker stores snapshots without an `id` field (it's an internal Swift
-    // concept for SwiftUI's Identifiable). When decoding cloud responses, mint
-    // a fresh UUID instead of erroring out. Forward compat with future versions
-    // that may include `id` is preserved by trying to decode it first.
+    // CloudKit (and legacy Worker payloads) don't carry our internal `id` field —
+    // it's a SwiftUI Identifiable helper, not part of the wire format. On decode,
+    // mint a fresh UUID if missing; forward-compat with future versions that may
+    // include `id` is preserved by trying to decode it first.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
