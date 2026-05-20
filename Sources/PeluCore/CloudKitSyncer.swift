@@ -72,12 +72,16 @@ public actor CloudKitSyncer {
     /// Fetch every `MacSnapshot` record in the user's private DB. Returns them
     /// already wrapped in `AggregateSnapshot`, sorted alphabetically by label so
     /// the "primary" Mac (used by Widget / Live Activity) is stable.
+    ///
+    /// We deliberately don't pass a `sortDescriptors` to CKQuery: that would
+    /// require the `label` field be marked **Sortable** in CloudKit Dashboard
+    /// (which new auto-generated schemas are not). Sorting client-side avoids
+    /// that gotcha entirely.
     public func fetchAllMacs() async throws -> AggregateSnapshot {
         let query = CKQuery(
             recordType: MacSnapshotRecord.recordType,
             predicate: NSPredicate(value: true)
         )
-        query.sortDescriptors = [NSSortDescriptor(key: "label", ascending: true)]
 
         var collected: [MacSnapshot] = []
         do {
@@ -99,6 +103,7 @@ public actor CloudKitSyncer {
             throw SyncError.unknown(error)
         }
 
+        collected.sort { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
         return AggregateSnapshot(macs: collected)
     }
 
