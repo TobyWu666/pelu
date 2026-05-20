@@ -5,6 +5,7 @@ import SwiftUI
 @main
 struct PeluApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @AppStorage("pelu.onboardingCompleted") private var onboardingCompleted = false
     @State private var showSplash = true
     @State private var splashOpacity = 1.0
     @State private var didScheduleSplash = false
@@ -12,11 +13,17 @@ struct PeluApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                TabView {
-                    PeluDashboardScreen()
-                        .tabItem { Label("用量", systemImage: "waveform.path.ecg") }
-                    PeluSettingsScreen()
-                        .tabItem { Label("設定", systemImage: "gearshape") }
+                if onboardingCompleted {
+                    TabView {
+                        PeluDashboardScreen()
+                            .tabItem { Label("用量", systemImage: "waveform.path.ecg") }
+                        PeluSettingsScreen()
+                            .tabItem { Label("設定", systemImage: "gearshape") }
+                    }
+                    .transition(.opacity)
+                } else {
+                    iOSOnboardingView()
+                        .transition(.opacity)
                 }
 
                 if showSplash {
@@ -26,6 +33,7 @@ struct PeluApp: App {
                         .zIndex(1)
                 }
             }
+            .animation(.easeInOut(duration: 0.35), value: onboardingCompleted)
             .onAppear {
                 guard !didScheduleSplash else { return }
                 didScheduleSplash = true

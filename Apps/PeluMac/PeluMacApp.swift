@@ -237,14 +237,7 @@ struct PeluMacApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            VStack(alignment: .leading, spacing: 12) {
-                PeluDashboardView(snapshot: monitor.snapshot)
-                    .frame(width: 360, height: 520)
-
-                bottomBar
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 16)
-            }
+            MacMenuBarContent(monitor: monitor, bottomBar: { bottomBar })
         } label: {
             menuBarLabel
         }
@@ -254,7 +247,15 @@ struct PeluMacApp: App {
             saveToAppGroup(newSnapshot)
             uploadSnapshotToCloud(newSnapshot)
         }
+
+        Window("歡迎使用 Pelu", id: PeluMacApp.onboardingWindowID) {
+            MacOnboardingView()
+        }
+        .defaultSize(width: 520, height: 460)
+        .windowResizability(.contentSize)
     }
+
+    static let onboardingWindowID = "pelu-onboarding"
 
     private var menuBarLabel: some View {
         HStack(spacing: 4) {
@@ -345,6 +346,36 @@ struct PeluMacApp: App {
             } catch {
                 print("Pelu CloudKit save failed: \(error)")
             }
+        }
+    }
+}
+
+/// Menu bar popover wrapper. Pulled out of `PeluMacApp.body` so we can use
+/// `@Environment(\.openWindow)` and auto-open the onboarding window on first
+/// launch (the App scene itself isn't a View and can't host environment values).
+private struct MacMenuBarContent<BottomBar: View>: View {
+    let monitor: UsageMonitor
+    let bottomBar: () -> BottomBar
+
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("pelu.onboardingCompleted") private var onboardingCompleted = false
+    @State private var didTryOpenOnboarding = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PeluDashboardView(snapshot: monitor.snapshot)
+                .frame(width: 360, height: 520)
+
+            bottomBar()
+                .padding(.horizontal, 18)
+                .padding(.bottom, 16)
+        }
+        .task {
+            // `Window` scenes on macOS don't auto-open with MenuBarExtra apps,
+            // so we trigger the onboarding window from here once per launch.
+            guard !didTryOpenOnboarding, !onboardingCompleted else { return }
+            didTryOpenOnboarding = true
+            openWindow(id: PeluMacApp.onboardingWindowID)
         }
     }
 }
