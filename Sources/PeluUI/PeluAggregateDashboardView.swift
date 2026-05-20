@@ -44,13 +44,14 @@ public struct PeluAggregateDashboardView: View {
     /// via TimelineView so the time-of-day wording stays accurate even if the
     /// user keeps the app open across a boundary (e.g. 17:59 → 18:00).
     ///
-    /// Type styled with `.serif` design (New York on Apple platforms) to echo
-    /// the Tiempos-style serif Claude.ai uses for its hero greetings.
+    /// Set in 全字庫正宋體 (TW-Sung) — a free Taiwanese government typeface that
+    /// covers full traditional Chinese. Latin glyphs in Pelu's greetings are minimal
+    /// (just punctuation / digits), so we don't need a Latin fallback.
     private var greetingHero: some View {
         TimelineView(.everyMinute) { context in
             VStack(alignment: .leading, spacing: 6) {
                 Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent))
-                    .font(.system(.title, design: .serif, weight: .regular))
+                    .font(.custom("TW-Sung-98_1", size: 28, relativeTo: .title))
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
