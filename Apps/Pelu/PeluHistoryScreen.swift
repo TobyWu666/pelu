@@ -1,10 +1,10 @@
+import Charts
 import PeluCore
 import PeluUI
 import SwiftUI
 
-/// Casual "how much have I spent on AI" overview. Numbers are inherently rough
-/// — Claude Code's `cost.total_cost_usd` is session-scoped, not strictly daily —
-/// so the UI explicitly frames everything as **estimates**.
+/// Casual "how much AI compute have I racked up" overview.
+/// One hero stat + a bar chart, no per-row clutter.
 struct PeluHistoryScreen: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var history = UsageHistory()
@@ -14,12 +14,11 @@ struct PeluHistoryScreen: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if dailyTotals.isEmpty {
                     emptyState
                 } else {
-                    list
+                    content
                 }
             }
             .navigationTitle("歷史")
@@ -41,20 +40,22 @@ struct PeluHistoryScreen: View {
         let date: Date
         let costUSD: Decimal
         var id: Date { date }
+        var costDouble: Double { NSDecimalNumber(decimal: costUSD).doubleValue }
     }
 
-    /// One number per day across all Macs / providers. Days with no cost data
-    /// are skipped — they'd just clutter the list.
     private var dailyTotals: [DailyTotal] {
-        history.entries.compactMap { entry in
-            let total = entry.macs.reduce(into: Decimal(0)) { sum, mac in
-                for metric in mac.snapshot.metrics {
-                    if let cost = metric.costTodayUSD { sum += cost }
+        // Ascending by date so the chart reads left-to-right oldest → newest.
+        history.entries
+            .compactMap { entry in
+                let total = entry.macs.reduce(into: Decimal(0)) { sum, mac in
+                    for metric in mac.snapshot.metrics {
+                        if let cost = metric.costTodayUSD { sum += cost }
+                    }
                 }
+                guard total > 0 else { return nil }
+                return DailyTotal(date: entry.date, costUSD: total)
             }
-            guard total > 0 else { return nil }
-            return DailyTotal(date: entry.date, costUSD: total)
-        }
+            .sorted { $0.date < $1.date }
     }
 
     private var totalCost: Decimal {
@@ -66,69 +67,113 @@ struct PeluHistoryScreen: View {
         return totalCost / Decimal(dailyTotals.count)
     }
 
-    // MARK: - List + hero
-
-    private var list: some View {
-        List {
-            heroSection
-            daysSection
-        }
-        .listStyle(.insetGrouped)
+    private var peakCost: Decimal {
+        dailyTotals.map(\.costUSD).max() ?? 0
     }
 
-    private var heroSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Text(formatCost(totalCost, fractionDigits: 2))
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
-                Text("最近 \(dailyTotals.count) 天估算")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.caption2)
-                    Text("平均每天 \(formatCost(averageDaily, fractionDigits: 2))")
-                        .font(.caption)
-                }
-                .foregroundStyle(.tertiary)
-                .padding(.top, 2)
+    // MARK: - Content
+
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                heroBlock
+                chartBlock
+                footerNote
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-        } footer: {
-            Text("數字根據 Claude Code 與 Codex 在 session 內的累計 cost 估算，僅供參考。")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            .padding(20)
         }
     }
 
-    private var daysSection: some View {
-        Section("每天") {
-            ForEach(dailyTotals) { day in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(day.date, format: .dateTime.month().day())
-                            .font(.body.weight(.semibold))
-                        Text(day.date, format: .dateTime.weekday(.wide))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+    private var heroBlock: some View {
+        VStack(spacing: 6) {
+            Text(formatCost(totalCost))
+                .font(.system(size: 52, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+            Text("最近 \(dailyTotals.count) 天估算")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 24) {
+                statTile(label: "平均每天", value: formatCost(averageDaily))
+                statTile(label: "最高一天", value: formatCost(peakCost))
+            }
+            .padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .padding(.horizontal, 16)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func statTile(label: String, value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var chartBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("每日花費")
+                .font(.headline)
+            Chart(dailyTotals) { day in
+                BarMark(
+                    x: .value("日期", day.date, unit: .day),
+                    y: .value("花費", day.costDouble)
+                )
+                .foregroundStyle(PeluTheme.primaryText(for: colorScheme).opacity(0.85))
+                .cornerRadius(3)
+            }
+            .frame(height: 200)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day, count: chartStride)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel(format: .dateTime.month(.defaultDigits).day(.defaultDigits))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let amount = value.as(Double.self) {
+                            Text("$\(Int(amount))")
+                        }
                     }
-                    Spacer()
-                    Text(formatCost(day.costUSD, fractionDigits: 2))
-                        .font(.body.monospacedDigit().weight(.medium))
-                    Text(emoji(for: day.costUSD))
-                        .font(.title3)
                 }
-                .padding(.vertical, 2)
             }
         }
+        .padding(16)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    /// Pick a sensible x-axis stride so labels don't overlap on a small screen.
+    private var chartStride: Int {
+        switch dailyTotals.count {
+        case ..<8:   return 1
+        case ..<15:  return 2
+        case ..<22:  return 3
+        default:     return 5
+        }
+    }
+
+    private var footerNote: some View {
+        Text("數字依 API 定價推算「運算等值花費」。Pro / Max / Team 訂閱用戶的月費是固定的，這裡只是讓你看見自己實際消耗的運算量。")
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 4)
     }
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: "creditcard.and.123")
+            Image(systemName: "chart.bar.xaxis")
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary)
             Text("還沒有花費紀錄")
@@ -144,27 +189,13 @@ struct PeluHistoryScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Helpers
-
-    private func formatCost(_ value: Decimal, fractionDigits: Int) -> String {
+    private func formatCost(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = fractionDigits
-        formatter.minimumFractionDigits = fractionDigits
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
         return formatter.string(from: value as NSDecimalNumber) ?? "$\(value)"
-    }
-
-    /// Casual visual indicator. Brackets chosen by feel — adjust if user
-    /// feedback says "$5 isn't 🔥 in my world".
-    private func emoji(for cost: Decimal) -> String {
-        switch cost {
-        case ..<1:    return "☕"   // 輕鬆一天
-        case 1..<5:   return "💪"   // 標準輸出
-        case 5..<15:  return "🔥"   // 認真工作
-        case 15..<30: return "🚀"   // 全力以赴
-        default:      return "🤯"   // 燒錢日
-        }
     }
 }
 

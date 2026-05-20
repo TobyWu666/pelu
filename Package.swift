@@ -36,7 +36,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PeluCoreTests",
-            dependencies: ["PeluCore"]
+            dependencies: ["PeluCore", "PeluUI"]
         ),
     ]
 )

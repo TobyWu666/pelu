@@ -18,6 +18,7 @@ public struct PeluAggregateDashboardView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                greetingHero
                 header
 
                 if aggregate.macs.isEmpty {
@@ -39,18 +40,47 @@ public struct PeluAggregateDashboardView: View {
         }
     }
 
+    /// Hero greeting at the top of the dashboard. Refreshes itself every minute
+    /// via TimelineView so the time-of-day wording stays accurate even if the
+    /// user keeps the app open across a boundary (e.g. 17:59 → 18:00).
+    private var greetingHero: some View {
+        TimelineView(.everyMinute) { context in
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent))
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                    .multilineTextAlignment(.leading)
+                Text(subheading)
+                    .font(.subheadline)
+                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        }
+    }
+
+    /// Highest 5h used% across all Macs / providers — the "how busy are you
+    /// right now" signal that drives the greeting tone.
+    private var busiestUsedPercent: Double? {
+        let allUsed = aggregate.macs.flatMap { $0.snapshot.metrics.compactMap(\.usedPercent) }
+        return allUsed.max()
+    }
+
+    private var subheading: String {
+        guard let percent = busiestUsedPercent else { return "尚無資料" }
+        return "目前最高 5 小時用量 \(Int(percent.rounded()))%"
+    }
+
     private var header: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                if let newest = aggregate.newestGeneratedAt {
-                    Text("最後更新 \(UpdatedAtFormatter.string(from: newest))")
-                        .font(.subheadline)
-                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-                } else {
-                    Text("尚未收到資料")
-                        .font(.subheadline)
-                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-                }
+            if let newest = aggregate.newestGeneratedAt {
+                Text("最後更新 \(UpdatedAtFormatter.string(from: newest))")
+                    .font(.subheadline)
+                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+            } else {
+                Text("尚未收到資料")
+                    .font(.subheadline)
+                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
             }
             Spacer()
             // Pick the freshest Mac's source for the pill — they're all .cloud in practice.
