@@ -87,7 +87,7 @@ struct PeluHistoryScreen: View {
     private var heroBlock: some View {
         VStack(spacing: 6) {
             Text(formatCost(totalCost))
-                .font(.system(size: 52, weight: .bold, design: .rounded))
+                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
             Text("最近 \(dailyTotals.count) 天估算")
