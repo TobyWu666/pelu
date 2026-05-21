@@ -10,6 +10,13 @@ struct PeluSettingsScreen: View {
     @StateObject private var notifications = NotificationManager.shared
     @State private var permissionDeniedAlert = false
     @State private var iCloudStatus: CloudKitAccountChecker.Result = .unknown(underlying: "checking")
+    @State private var pendingLinkAlert = false
+
+    /// Outbound link targets. Pointing to about:blank for now — replace with the
+    /// real URLs when the pages exist. Until then, tapping shows a "尚未開放" alert.
+    private static let privacyPolicyURL: URL? = nil
+    private static let supportCenterURL: URL? = nil
+    private static let tutorialCenterURL: URL? = nil
 
     var body: some View {
         NavigationStack {
@@ -18,6 +25,7 @@ struct PeluSettingsScreen: View {
                 iCloudSection
                 notificationsSection
                 liveActivitySection
+                resourcesSection
                 aboutSection
             }
             .navigationTitle("設定")
@@ -34,6 +42,11 @@ struct PeluSettingsScreen: View {
                 Button("取消", role: .cancel) {}
             } message: {
                 Text("請至「設定 → Pelu → 通知」開啟通知。")
+            }
+            .alert("尚未開放", isPresented: $pendingLinkAlert) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text("這個頁面還沒上線，敬請期待。")
             }
         }
     }
@@ -129,11 +142,38 @@ struct PeluSettingsScreen: View {
         }
     }
 
+    private var resourcesSection: some View {
+        Section("資源") {
+            linkRow(label: "教學中心", systemImage: "book", url: Self.tutorialCenterURL)
+            linkRow(label: "支援中心", systemImage: "lifepreserver", url: Self.supportCenterURL)
+            linkRow(label: "隱私權政策", systemImage: "hand.raised", url: Self.privacyPolicyURL)
+        }
+    }
+
+    @ViewBuilder
+    private func linkRow(label: String, systemImage: String, url: URL?) -> some View {
+        Button {
+            if let url {
+                UIApplication.shared.open(url)
+            } else {
+                pendingLinkAlert = true
+            }
+        } label: {
+            HStack {
+                Label(label, systemImage: systemImage)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "arrow.up.right.square")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
     private var aboutSection: some View {
         Section("關於") {
             LabeledContent("版本", value: "1.0.0")
             LabeledContent("資料儲存位置", value: "你的 iCloud")
-            LabeledContent("Bundle ID", value: "org.tobywu.pelu")
         }
     }
 
