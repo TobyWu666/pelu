@@ -17,30 +17,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // by default iOS drops them when the target app is active.
         UNUserNotificationCenter.current().delegate = self
 
-        // All navigation bar titles (large + inline) use the same SourceHanSerifTC-Bold
-        // we render the greeting hero in — keeps the typographic identity coherent
-        // across tabs instead of mixing serif heroes with SF Pro titles.
-        applyNavigationTitleFont()
-
         return true
-    }
-
-    private func applyNavigationTitleFont() {
-        let inlineSize: CGFloat = 17
-        let largeSize: CGFloat = 30
-
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithDefaultBackground()
-        if let inlineFont = UIFont(name: "SourceHanSerifTC-Bold", size: inlineSize) {
-            appearance.titleTextAttributes[.font] = inlineFont
-        }
-        if let largeFont = UIFont(name: "SourceHanSerifTC-Bold", size: largeSize) {
-            appearance.largeTitleTextAttributes[.font] = largeFont
-        }
-
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        UINavigationBar.appearance().compactAppearance = appearance
     }
 
     func application(
