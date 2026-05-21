@@ -24,6 +24,21 @@ public struct CloudKitAccountChecker: Sendable {
         case unexpected(rawValue: Int)
     }
 
+    /// Status + a stable per-user identifier. The identifier is the CloudKit
+    /// user record name — derived from the iCloud account but anonymized
+    /// (Apple won't give us the email). Same iCloud account → same identifier
+    /// across this app's iPhone and Mac binaries, so the user can eyeball-match.
+    public struct AccountInfo: Sendable, Equatable {
+        public let status: Result
+        /// e.g. `_abc123def456…`. Truncate before displaying.
+        public let userRecordName: String?
+
+        public init(status: Result, userRecordName: String?) {
+            self.status = status
+            self.userRecordName = userRecordName
+        }
+    }
+
     public init() {}
 
     /// Default container, derived from the entitlement-configured CloudKit container.
@@ -47,6 +62,24 @@ public struct CloudKitAccountChecker: Sendable {
         } catch {
             return .unknown(underlying: String(describing: error))
         }
+    }
+
+    /// Status + the CloudKit user record name when available.
+    public func info(container: CKContainer = .default()) async -> AccountInfo {
+        let status = await self.status(container: container)
+        guard status == .available else {
+            return AccountInfo(status: status, userRecordName: nil)
+        }
+        let recordID = try? await container.userRecordID()
+        return AccountInfo(status: status, userRecordName: recordID?.recordName)
+    }
+
+    /// Short fingerprint for display — first 10 chars (after the leading
+    /// underscore CloudKit always uses). Stable across launches.
+    public static func displayFingerprint(_ recordName: String?) -> String? {
+        guard let raw = recordName, !raw.isEmpty else { return nil }
+        let trimmed = raw.hasPrefix("_") ? String(raw.dropFirst()) : raw
+        return String(trimmed.prefix(10)).uppercased()
     }
 
     /// Human-readable label for onboarding screens (繁中).

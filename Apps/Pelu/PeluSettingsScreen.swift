@@ -9,7 +9,10 @@ struct PeluSettingsScreen: View {
 
     @StateObject private var notifications = NotificationManager.shared
     @State private var permissionDeniedAlert = false
-    @State private var iCloudStatus: CloudKitAccountChecker.Result = .unknown(underlying: "checking")
+    @State private var iCloudInfo: CloudKitAccountChecker.AccountInfo = .init(
+        status: .unknown(underlying: "checking"),
+        userRecordName: nil
+    )
     @State private var pendingLinkAlert = false
 
     /// Outbound link targets. Pointing to about:blank for now — replace with the
@@ -29,9 +32,11 @@ struct PeluSettingsScreen: View {
                 aboutSection
             }
             .navigationTitle("設定")
+            .listSectionSpacing(22)
+            .contentMargins(.top, 8, for: .scrollContent)
             .task {
                 await notifications.refreshAuthorizationStatus()
-                iCloudStatus = await CloudKitAccountChecker().status()
+                iCloudInfo = await CloudKitAccountChecker().info()
             }
             .alert("通知權限被拒絕", isPresented: $permissionDeniedAlert) {
                 Button("前往設定") {
@@ -115,19 +120,31 @@ struct PeluSettingsScreen: View {
 
     private var iCloudSection: some View {
         Section {
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: iCloudIconName)
                     .foregroundStyle(iCloudColor)
-                Text(CloudKitAccountChecker.displayMessage(for: iCloudStatus))
+                Text(CloudKitAccountChecker.displayMessage(for: iCloudInfo.status))
                     .font(.callout)
+            }
+            if let fingerprint = CloudKitAccountChecker.displayFingerprint(iCloudInfo.userRecordName) {
+                LabeledContent("帳號 ID") {
+                    Text(fingerprint)
+                        .font(.callout.monospaced())
+                        .foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("iCloud 同步")
+        } footer: {
+            if iCloudInfo.userRecordName != nil {
+                Text("這個 ID 是 Apple 用來識別你的 iCloud 帳號的代號（Pelu 看不到你的 email）。在不同裝置上看到一樣的 ID，就代表它們連的是同一個 iCloud 帳號。")
+                    .font(.caption2)
+            }
         }
     }
 
     private var iCloudIconName: String {
-        switch iCloudStatus {
+        switch iCloudInfo.status {
         case .available: return "icloud.fill"
         case .noAccount, .restricted: return "icloud.slash"
         case .unknown, .unexpected: return "icloud"
@@ -135,7 +152,7 @@ struct PeluSettingsScreen: View {
     }
 
     private var iCloudColor: Color {
-        switch iCloudStatus {
+        switch iCloudInfo.status {
         case .available: return .green
         case .noAccount, .restricted: return .orange
         case .unknown, .unexpected: return .secondary
