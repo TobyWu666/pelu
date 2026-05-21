@@ -97,9 +97,12 @@ enum UsageSurfaceUpdater {
         }
 
         // Low-quota: fire when 5h usage% crosses 90 (data-driven).
-        if let previous = previousAggregate {
-            await LocalUsageNotifier.notifyLowQuotaCrossings(from: previous, to: aggregate)
-        }
+        // Pass an empty aggregate when there's no prior data so the notifier
+        // still has a chance to alert on a first-launch already-above-90 case.
+        await LocalUsageNotifier.notifyLowQuotaCrossings(
+            from: previousAggregate ?? AggregateSnapshot(macs: []),
+            to: aggregate
+        )
         // Reset: pre-schedule a UNNotification at each future resetDate so the
         // user gets pinged at the exact moment they can resume — no dependency
         // on a fresh CloudKit fetch or CLI activity.
@@ -115,7 +118,12 @@ enum UsageSurfaceUpdater {
 enum LocalUsageNotifier {
     private static let lowQuotaThreshold: Double = 90
 
-    /// Fire when 5h `usedPercent` crosses the low-quota threshold upward.
+    /// Fire when 5h `usedPercent` enters the >90% zone for a given Mac × provider.
+    /// Triggers on:
+    ///   - first observation that's already over the threshold (no previous data)
+    ///   - upward crossing from ≤90 to >90
+    /// Does NOT trigger on:
+    ///   - sustained values above threshold (previous was also >90 — already alerted)
     /// Per-Mac × per-provider; honors the user's `lowQuotaEnabled` toggle.
     static func notifyLowQuotaCrossings(
         from previous: AggregateSnapshot,
@@ -128,14 +136,19 @@ enum LocalUsageNotifier {
 
         let prevByMac = Dictionary(uniqueKeysWithValues: previous.macs.map { ($0.macId, $0) })
         for mac in current.macs {
-            guard let prevMac = prevByMac[mac.macId] else { continue }
-            let prevMetrics = Dictionary(uniqueKeysWithValues: prevMac.snapshot.metrics.map { ($0.provider, $0) })
+            let prevMetrics: [ProviderKind: UsageMetric] = prevByMac[mac.macId].map {
+                Dictionary(uniqueKeysWithValues: $0.snapshot.metrics.map { ($0.provider, $0) })
+            } ?? [:]
+
             for metric in mac.snapshot.metrics {
-                guard let prev = prevMetrics[metric.provider],
-                      let prevUsed = prev.usedPercent,
-                      let curUsed = metric.usedPercent,
-                      prevUsed <= lowQuotaThreshold,
-                      curUsed > lowQuotaThreshold else { continue }
+                guard let curUsed = metric.usedPercent, curUsed > lowQuotaThreshold else { continue }
+
+                // Skip if previous reading was already over the threshold — we've
+                // either already alerted, or the user has been informed via UI.
+                if let prevUsed = prevMetrics[metric.provider]?.usedPercent,
+                   prevUsed > lowQuotaThreshold {
+                    continue
+                }
 
                 let request = UNNotificationRequest(
                     identifier: "lowquota-\(mac.macId)-\(metric.provider.rawValue)",

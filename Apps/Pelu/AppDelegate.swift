@@ -1,5 +1,6 @@
 import CloudKit
 import UIKit
+import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -10,6 +11,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // to route CloudKit silent pushes. No prompt is shown to the user; this only
         // works at all because the app entitlement includes `aps-environment`.
         application.registerForRemoteNotifications()
+
+        // Become the UNUserNotificationCenter delegate so foreground notifications
+        // (banner + sound) actually appear instead of being silently consumed —
+        // by default iOS drops them when the target app is active.
+        UNUserNotificationCenter.current().delegate = self
+
         return true
     }
 
@@ -52,5 +59,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 completionHandler(.failed)
             }
         }
+    }
+}
+
+// Conformance in an extension + nonisolated method so the protocol's main
+// actor isolation doesn't fight Swift 6 strict concurrency. The body just
+// hands a value back; no UI work, no shared mutable state.
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound, .badge])
     }
 }
