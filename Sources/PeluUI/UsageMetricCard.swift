@@ -56,35 +56,24 @@ private struct SecondaryBar: View {
     @ViewBuilder
     private func barContent(width: CGFloat) -> some View {
         let usageWidth = width * min(max(percent / 100, 0), 1)
-        let resolvedUsageTint = usageTint ?? .secondary
 
-        #if os(iOS)
-        if let outerProgress {
-            let elapsedWidth = width * min(max(outerProgress, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(PeluTheme.sky.opacity(colorScheme == .dark ? 0.10 : 0.08))
-                    .frame(height: outerBarHeight)
-                Capsule()
-                    .fill(PeluTheme.sky.opacity(colorScheme == .dark ? 0.34 : 0.24))
-                    .frame(width: elapsedWidth, height: outerBarHeight)
-                Capsule()
-                    .strokeBorder(PeluTheme.sky.opacity(colorScheme == .dark ? 0.32 : 0.22), lineWidth: 1)
-                    .frame(height: outerBarHeight)
-
-                Capsule()
-                    .fill(PeluTheme.primaryText(for: colorScheme).opacity(colorScheme == .dark ? 0.14 : 0.08))
-                    .frame(height: secondaryBarHeight)
-                Capsule()
-                    .fill(resolvedUsageTint.opacity(colorScheme == .dark ? 0.82 : 0.72))
-                    .frame(width: usageWidth, height: secondaryBarHeight)
-            }
-        } else {
+        VStack(spacing: cycleLineGap) {
             plainUsageBar(width: usageWidth)
+            #if os(iOS)
+            // Hair-thin solid blue line under the usage bar, length tracks
+            // how far through the 7-day cycle we are. Nothing fancy — just a
+            // tiny progress indicator that doesn't compete with the main bar.
+            if let outerProgress {
+                let elapsedWidth = width * min(max(outerProgress, 0), 1)
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(PeluTheme.sky)
+                        .frame(width: elapsedWidth, height: cycleLineHeight)
+                    Spacer(minLength: 0)
+                }
+            }
+            #endif
         }
-        #else
-        plainUsageBar(width: usageWidth)
-        #endif
     }
 
     private func plainUsageBar(width: CGFloat) -> some View {
@@ -101,23 +90,18 @@ private struct SecondaryBar: View {
 
     private var barContainerHeight: CGFloat {
         #if os(iOS)
-        return outerProgress == nil ? secondaryBarHeight : outerBarHeight
+        return outerProgress == nil
+            ? secondaryBarHeight
+            : secondaryBarHeight + cycleLineGap + cycleLineHeight
         #else
         return secondaryBarHeight
         #endif
     }
 
-    private var outerBarHeight: CGFloat {
-        10
-    }
+    private var cycleLineHeight: CGFloat { 1 }
+    private var cycleLineGap: CGFloat { 3 }
 
-    private var secondaryBarHeight: CGFloat {
-        #if os(iOS)
-        return 6
-        #else
-        return 6
-        #endif
-    }
+    private var secondaryBarHeight: CGFloat { 6 }
 }
 
 // MARK: - UsageMetricCard
