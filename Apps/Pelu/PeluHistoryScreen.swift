@@ -43,19 +43,41 @@ struct PeluHistoryScreen: View {
         var costDouble: Double { NSDecimalNumber(decimal: costUSD).doubleValue }
     }
 
+    /// Per-day cost expressed as the *delta* from the previous recorded day,
+    /// per (Mac × provider). Claude Code's `cost.total_cost_usd` is session-
+    /// cumulative — a session that started yesterday still reports yesterday's
+    /// spending in today's snapshot, so summing the raw value double-counts.
+    /// Computing the day-over-day delta strips that out.
+    ///
+    /// When the cost number *drops* between recorded days (a new session
+    /// started), we treat the current day's full value as that day's spend.
+    /// We can't recover any earlier sessions that finished within the same
+    /// day — that nuance is gone by the time we snapshot.
     private var dailyTotals: [DailyTotal] {
-        // Ascending by date so the chart reads left-to-right oldest → newest.
-        history.entries
-            .compactMap { entry in
-                let total = entry.macs.reduce(into: Decimal(0)) { sum, mac in
-                    for metric in mac.snapshot.metrics {
-                        if let cost = metric.costTodayUSD { sum += cost }
-                    }
+        let sorted = history.entries.sorted { $0.date < $1.date }
+        var prevByKey: [String: Decimal] = [:]
+        var result: [DailyTotal] = []
+
+        for entry in sorted {
+            var dayTotal: Decimal = 0
+            for mac in entry.macs {
+                for metric in mac.snapshot.metrics {
+                    guard let cur = metric.costTodayUSD else { continue }
+                    let key = "\(mac.macId)|\(metric.provider.rawValue)"
+                    let prev = prevByKey[key] ?? 0
+                    // Cost decreased → session reset → today's value is the
+                    // new session's running total. Cost grew or stayed flat →
+                    // delta is the additional spend since last record.
+                    let delta: Decimal = cur < prev ? cur : (cur - prev)
+                    dayTotal += delta
+                    prevByKey[key] = cur
                 }
-                guard total > 0 else { return nil }
-                return DailyTotal(date: entry.date, costUSD: total)
             }
-            .sorted { $0.date < $1.date }
+            if dayTotal > 0 {
+                result.append(DailyTotal(date: entry.date, costUSD: dayTotal))
+            }
+        }
+        return result
     }
 
     private var totalCost: Decimal {
