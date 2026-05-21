@@ -23,12 +23,6 @@ public struct PeluDashboardView: View {
                 ForEach(snapshot.metrics) { metric in
                     UsageMetricCard(metric: metric)
                 }
-
-                SummaryTile(
-                    title: "同步",
-                    value: snapshot.source.displayName,
-                    systemImage: "dot.radiowaves.left.and.right"
-                )
             }
             .padding(20)
         }
