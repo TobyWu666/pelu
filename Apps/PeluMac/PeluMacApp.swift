@@ -407,9 +407,15 @@ final class UsageMonitor: @unchecked Sendable {
     }
 
     private func startPeriodicRefresh() {
-        periodicTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // Register on `.common` modes so the timer keeps firing while the
+        // MenuBarExtra popover is open (popover puts the run loop into
+        // event-tracking mode; `.default`-only timers skip those ticks and
+        // the dashboard appears to freeze while the user looks at it).
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             self?.refresh()
         }
+        RunLoop.main.add(timer, forMode: .common)
+        periodicTimer = timer
     }
 }
 
