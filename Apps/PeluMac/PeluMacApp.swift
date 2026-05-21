@@ -337,83 +337,64 @@ private struct MacMenuBarContent<BottomBar: View>: View {
     @State private var didTryOpenOnboarding = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            PeluDashboardView(snapshot: monitor.snapshot)
-                .frame(width: 360, height: 520)
-
-            bottomBar()
-                .padding(.horizontal, 18)
-                .padding(.bottom, 16)
-        }
-        .background(
-            // Pin the popover NSPanel so the user can't drag it around the
-            // screen. MenuBarExtra's `.window` style is an NSPanel under the
-            // hood; we walk up to it and flip isMovable off.
-            MenuBarPopoverPinner()
-        )
-        .task {
-            // `Window` scenes on macOS don't auto-open with MenuBarExtra apps,
-            // so we trigger the onboarding window from here once per launch.
-            guard !didTryOpenOnboarding, !onboardingCompleted else { return }
-            didTryOpenOnboarding = true
-            openWindow(id: PeluMacApp.onboardingWindowID)
-        }
+        PeluDashboardView(snapshot: monitor.snapshot)
+            .frame(width: 360, height: 520)
+            .overlay(alignment: .bottomTrailing) {
+                bottomBar()
+                    .padding(10)
+            }
+            .background(
+                // Pin the popover NSPanel so the user can't drag it around the
+                // screen. MenuBarExtra's `.window` style is an NSPanel under
+                // the hood; we lock it the moment it gets a window.
+                MenuBarPopoverPinner()
+            )
+            .task {
+                // `Window` scenes on macOS don't auto-open with MenuBarExtra
+                // apps, so we trigger the onboarding window from here once.
+                guard !didTryOpenOnboarding, !onboardingCompleted else { return }
+                didTryOpenOnboarding = true
+                openWindow(id: PeluMacApp.onboardingWindowID)
+            }
     }
 }
 
-/// NSViewRepresentable that locks the enclosing NSWindow so it can't be
-/// dragged. Used to nail the MenuBarExtra popover to its menu bar anchor.
+/// NSViewRepresentable that locks the enclosing NSPanel so it can't be
+/// dragged. Subclassed NSView used so we can override `viewDidMoveToWindow`
+/// — that hook fires synchronously the moment the view enters a window,
+/// which is more reliable than DispatchQueue.main.async would be.
 private struct MenuBarPopoverPinner: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { applyPinning(from: view) }
-        return view
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { applyPinning(from: nsView) }
-    }
-    private func applyPinning(from view: NSView) {
-        guard let window = view.window else { return }
-        window.isMovable = false
-        window.isMovableByWindowBackground = false
+    func makeNSView(context: Context) -> PinningView { PinningView() }
+    func updateNSView(_ nsView: PinningView, context: Context) {}
+
+    final class PinningView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.isMovable = false
+            window.isMovableByWindowBackground = false
+        }
     }
 }
 
-/// Bottom bar inside the menu bar popover. Minimal — just last-updated
-/// timestamp, refresh, and settings entry. All preferences live in the
-/// dedicated Settings window now.
+/// Tiny floating settings button overlaid on the popover's bottom-right
+/// corner. All preferences (including manual refresh) live in the Settings
+/// window now, so this is just the entry point.
 private struct MacBottomBar: View {
     let monitor: UsageMonitor
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(UpdatedAtFormatter.string(from: monitor.snapshot.generatedAt))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            Spacer()
-
-            Button {
-                monitor.refresh()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("立即刷新")
-
-            Button {
-                openWindow(id: PeluMacApp.settingsWindowID)
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("設定")
+        Button {
+            openWindow(id: PeluMacApp.settingsWindowID)
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .background(.regularMaterial, in: Circle())
         }
-        .padding(12)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .buttonStyle(.plain)
+        .help("設定")
     }
 }
