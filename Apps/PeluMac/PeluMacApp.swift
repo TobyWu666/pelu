@@ -14,13 +14,47 @@ struct CodexJSONLReader {
     }
 
     func readLatestMetric() -> UsageMetric {
-        guard let payload = latestTokenCountPayload() else {
+        guard let match = latestTokenCountMatch() else {
             return UsageMetric(provider: .codex, usedPercent: nil, note: "今日無 Codex 使用紀錄")
         }
-        return metric(from: payload)
+        return metric(from: match.payload)
     }
 
-    private func latestTokenCountPayload() -> [String: Any]? {
+    func latestTokenCountFileURL() -> URL? {
+        latestTokenCountMatch()?.fileURL
+    }
+
+    func currentSessionsDirectory(now: Date = Date()) -> URL {
+        let cal = Calendar.current
+        let y = cal.component(.year, from: now)
+        let m = cal.component(.month, from: now)
+        let d = cal.component(.day, from: now)
+        return codexDir.appendingPathComponent(
+            String(format: "sessions/%d/%02d/%02d", y, m, d)
+        )
+    }
+
+    private struct TokenCountMatch {
+        let timestamp: Date
+        let fileURL: URL
+        let payload: [String: Any]
+    }
+
+    private func latestTokenCountMatch() -> TokenCountMatch? {
+        let jsonlFiles = candidateJSONLFiles()
+
+        var newest: TokenCountMatch?
+        for fileURL in jsonlFiles {
+            guard let match = latestTokenCountMatch(in: fileURL) else { continue }
+            if newest == nil || match.timestamp > newest!.timestamp {
+                newest = match
+            }
+        }
+
+        return newest
+    }
+
+    private func candidateJSONLFiles() -> [URL] {
         // Codex rate_limits 是 5h / 7d 滾動式 window；昨天最後一筆 event 的 rate_limits
         // 在 reset 前仍代表當前 quota。所以掃最近 8 天，找 modification date 最新的 jsonl。
         let now = Date()
@@ -62,25 +96,13 @@ struct CodexJSONLReader {
             jsonlFiles += recent
         }
 
-        // Sort newest-first, search for the last token_count event
-        jsonlFiles.sort {
-            let aDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let bDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return aDate > bDate
-        }
-
-        for fileURL in jsonlFiles {
-            if let payload = lastTokenCountPayload(in: fileURL) {
-                return payload
-            }
-        }
-
-        return nil
+        return jsonlFiles
     }
 
-    private func lastTokenCountPayload(in fileURL: URL) -> [String: Any]? {
+    private func latestTokenCountMatch(in fileURL: URL) -> TokenCountMatch? {
         guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return nil }
-        var last: [String: Any]? = nil
+        let fileModifiedAt = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        var latest: TokenCountMatch?
 
         for line in content.split(whereSeparator: \.isNewline) {
             guard let data = String(line).data(using: .utf8),
@@ -89,9 +111,17 @@ struct CodexJSONLReader {
                   let payload = obj["payload"] as? [String: Any],
                   (payload["type"] as? String) == "token_count"
             else { continue }
-            last = payload
+            let timestamp = (obj["timestamp"] as? String).flatMap(Self.parseCodexTimestamp) ?? fileModifiedAt
+            let match = TokenCountMatch(timestamp: timestamp, fileURL: fileURL, payload: payload)
+            if latest == nil || match.timestamp > latest!.timestamp {
+                latest = match
+            }
         }
-        return last
+        return latest
+    }
+
+    private static func parseCodexTimestamp(_ string: String) -> Date? {
+        ISO8601DateFormatter().date(from: string)
     }
 
     private func metric(from payload: [String: Any]) -> UsageMetric {
@@ -146,7 +176,14 @@ final class UsageMonitor: @unchecked Sendable {
     private let claudeParser = ClaudeCodeParser()
     private let codexReader = CodexJSONLReader()
     private var fileSource: DispatchSourceFileSystemObject?
+    private var codexFileSource: DispatchSourceFileSystemObject?
+    private var codexDirectorySource: DispatchSourceFileSystemObject?
+    private var watchedCodexFilePath: String?
+    private var watchedCodexDirectoryPath: String?
     private var periodicTimer: Timer?
+    // Keyed by the resetDate's `timeIntervalSince1970` rounded to nearest sec
+    // so we can dedupe identical fire-at times across providers.
+    private var resetTimers: [TimeInterval: DispatchSourceTimer] = [:]
 
     init() {
         let ud = UserDefaults.standard
@@ -171,23 +208,84 @@ final class UsageMonitor: @unchecked Sendable {
     deinit {
         periodicTimer?.invalidate()
         fileSource?.cancel()
+        codexFileSource?.cancel()
+        codexDirectorySource?.cancel()
+        resetTimers.values.forEach { $0.cancel() }
     }
 
     func refresh() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
 
-            guard let data = try? Data(contentsOf: self.claudeFilePath),
-                  let claudeMetric = try? self.claudeParser.parse(data: data) else { return }
+            let claudeMetric: UsageMetric
+            if let data = try? Data(contentsOf: self.claudeFilePath),
+               let parsed = try? self.claudeParser.parse(data: data) {
+                claudeMetric = parsed
+            } else {
+                claudeMetric = UsageMetric(
+                    provider: .claudeCode,
+                    usedPercent: nil,
+                    note: "Claude status JSON 尚未可讀"
+                )
+            }
 
             let codexMetric = self.codexReader.readLatestMetric()
+            let latestCodexFileURL = self.codexReader.latestTokenCountFileURL()
+            let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
 
             let snap = UsageSnapshot(
                 generatedAt: Date(),
                 source: .local,
                 metrics: [claudeMetric, codexMetric]
             )
-            DispatchQueue.main.async { self.snapshot = snap }
+            DispatchQueue.main.async {
+                self.snapshot = snap
+                self.updateCodexFileWatcher(fileURL: latestCodexFileURL)
+                self.updateCodexDirectoryWatcher(directoryURL: codexSessionsDirectory)
+                self.rescheduleResetTimers(for: snap)
+            }
+        }
+    }
+
+    /// Schedule a one-shot DispatchSourceTimer to fire at each future resetDate
+    /// in the snapshot. When it fires we call `refresh()` — which re-runs the
+    /// parsers, sees `resetDate < now`, and writes `usedPercent = 0` to cloud.
+    /// Result: the dashboard zeroes out at the exact reset moment without
+    /// waiting for the 60s polling timer (or the user to nudge the CLI).
+    private func rescheduleResetTimers(for snapshot: UsageSnapshot) {
+        let now = Date()
+        let allDates = snapshot.metrics.flatMap { metric in
+            [metric.resetDate, metric.weeklyResetDate]
+        }
+        let futureDates: Set<TimeInterval> = Set(
+            allDates.compactMap { date in
+                guard let date, date > now else { return nil }
+                return floor(date.timeIntervalSince1970)
+            }
+        )
+
+        // Cancel timers no longer in the snapshot's reset set
+        for (key, timer) in resetTimers where !futureDates.contains(key) {
+            timer.cancel()
+            resetTimers.removeValue(forKey: key)
+        }
+
+        // Schedule timers for new reset times
+        for key in futureDates where resetTimers[key] == nil {
+            let fireDate = Date(timeIntervalSince1970: key)
+            // Tiny buffer so the timer fires *after* the actual reset second —
+            // otherwise our `resetDate < now` check might still be false.
+            let delay = max(1, fireDate.timeIntervalSinceNow + 0.5)
+
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now() + delay)
+            timer.setEventHandler { [weak self] in
+                guard let self else { return }
+                self.resetTimers.removeValue(forKey: key)
+                self.refresh()
+            }
+            timer.resume()
+            resetTimers[key] = timer
         }
     }
 
@@ -220,6 +318,73 @@ final class UsageMonitor: @unchecked Sendable {
         source.setCancelHandler { close(fd) }
         source.resume()
         fileSource = source
+    }
+
+    private func updateCodexFileWatcher(fileURL: URL?) {
+        guard let fileURL else { return }
+        guard watchedCodexFilePath != fileURL.path else { return }
+
+        codexFileSource?.cancel()
+        codexFileSource = nil
+        watchedCodexFilePath = nil
+
+        let fd = open(fileURL.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend, .rename, .delete],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = source.data
+            if flags.contains(.rename) || flags.contains(.delete) {
+                self.codexFileSource?.cancel()
+                self.codexFileSource = nil
+                self.watchedCodexFilePath = nil
+            }
+            self.refresh()
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        codexFileSource = source
+        watchedCodexFilePath = fileURL.path
+    }
+
+    private func updateCodexDirectoryWatcher(directoryURL: URL) {
+        guard watchedCodexDirectoryPath != directoryURL.path else { return }
+
+        codexDirectorySource?.cancel()
+        codexDirectorySource = nil
+        watchedCodexDirectoryPath = nil
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return }
+
+        let fd = open(directoryURL.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .rename, .delete],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = source.data
+            if flags.contains(.rename) || flags.contains(.delete) {
+                self.codexDirectorySource?.cancel()
+                self.codexDirectorySource = nil
+                self.watchedCodexDirectoryPath = nil
+            }
+            self.refresh()
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        codexDirectorySource = source
+        watchedCodexDirectoryPath = directoryURL.path
     }
 
     private func startPeriodicRefresh() {

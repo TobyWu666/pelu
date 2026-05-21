@@ -26,7 +26,13 @@ import Testing
     }
     """.data(using: .utf8)!
 
-    let metric = try ClaudeCodeParser().parse(data: payload)
+    // Pass a generatedAt before the reset_at timestamps so the parser
+    // doesn't apply its "reset-already-elapsed → 0" rule (which would
+    // otherwise trigger because these test dates are now in the past).
+    let metric = try ClaudeCodeParser().parse(
+        data: payload,
+        generatedAt: Date(timeIntervalSince1970: 1700000000)
+    )
 
     #expect(metric.provider == .claudeCode)
     #expect(metric.usedPercent == 2)
@@ -35,6 +41,32 @@ import Testing
     #expect(metric.resetDate == Date(timeIntervalSince1970: 1779117000))
     #expect(metric.status == .normal)
     #expect(metric.costTodayUSD != nil)
+}
+
+@Test func claudeCodeParserZeroesUsedPercentAfterFiveHourReset() throws {
+    let payload = """
+    {
+      "rate_limits": {
+        "five_hour": {
+          "used_percentage": 85,
+          "resets_at": 1779117000
+        },
+        "seven_day": {
+          "used_percentage": 40,
+          "resets_at": 9999999999
+        }
+      }
+    }
+    """.data(using: .utf8)!
+
+    // generatedAt is *after* the 5h reset but *before* the weekly reset.
+    let metric = try ClaudeCodeParser().parse(
+        data: payload,
+        generatedAt: Date(timeIntervalSince1970: 1779117000 + 60)
+    )
+
+    #expect(metric.usedPercent == 0)        // 5h window is past its reset
+    #expect(metric.weeklyPercent == 40)     // weekly window still active
 }
 
 @Test func claudeCodeParserFallsBackToLooseSchema() throws {
@@ -48,7 +80,11 @@ import Testing
     }
     """.data(using: .utf8)!
 
-    let metric = try ClaudeCodeParser().parse(data: payload)
+    // generatedAt before the loose-schema reset_at so we get the raw value.
+    let metric = try ClaudeCodeParser().parse(
+        data: payload,
+        generatedAt: Date(timeIntervalSince1970: 1700000000)
+    )
 
     #expect(metric.provider == .claudeCode)
     #expect(metric.usedPercent == 37)

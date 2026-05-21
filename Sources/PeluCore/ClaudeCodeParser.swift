@@ -51,15 +51,31 @@ public struct ClaudeCodeParser: Sendable {
             matching: ["reset", "resetat", "resetdate", "resetsat", "resettime"]
         )
 
+        // Treat the window as zeroed once its reset time has passed — the CLI
+        // file is only rewritten when the user actually invokes Claude, so we
+        // must derive "0 after reset" client-side or the UI sits on stale %.
+        // (Codex parser already does the same trick.)
+        let now = generatedAt
+        let resolvedUsed: Double? = {
+            guard let raw = usedPercent else { return nil }
+            if let r = resetFallback, r < now { return 0 }
+            return raw
+        }()
+        let resolvedWeekly: Double? = {
+            guard let raw = weeklyPercentResolved else { return nil }
+            if let r = weeklyResetDate, r < now { return 0 }
+            return raw
+        }()
+
         return UsageMetric(
             provider: .claudeCode,
-            usedPercent: usedPercent,
-            weeklyPercent: weeklyPercentResolved,
+            usedPercent: resolvedUsed,
+            weeklyPercent: resolvedWeekly,
             contextWindowPercent: contextWindowPercent,
             costTodayUSD: costFallback,
             resetDate: resetFallback,
             weeklyResetDate: weeklyResetDate,
-            note: usedPercent == nil ? "Claude status JSON 尚未包含可辨識百分比" : nil
+            note: resolvedUsed == nil ? "Claude status JSON 尚未包含可辨識百分比" : nil
         )
     }
 }
