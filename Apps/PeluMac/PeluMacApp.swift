@@ -113,16 +113,35 @@ struct CodexJSONLReader {
             else { continue }
             let timestamp = (obj["timestamp"] as? String).flatMap(Self.parseCodexTimestamp) ?? fileModifiedAt
             let match = TokenCountMatch(timestamp: timestamp, fileURL: fileURL, payload: payload)
-            if latest == nil || match.timestamp > latest!.timestamp {
-                latest = match
-            }
+            // Use `>=` so when timestamps collide (e.g. burst of events in the
+            // same millisecond, or all-fallback-to-fileMtime) the later event
+            // in the file wins — JSONL order is chronological by construction.
+            if let current = latest, match.timestamp < current.timestamp { continue }
+            latest = match
         }
         return latest
     }
 
     private static func parseCodexTimestamp(_ string: String) -> Date? {
-        ISO8601DateFormatter().date(from: string)
+        // Codex writes ISO-8601 with fractional seconds (e.g.
+        // "2026-05-21T09:01:40.976Z"). The default ISO8601DateFormatter
+        // rejects the `.976` — bumping formatOptions fixes that.
+        // Without this every event silently falls back to file mtime, all
+        // matches in a file land on the same timestamp, and the in-file
+        // ">" comparison keeps the FIRST event instead of the latest.
+        if let date = Self.fractionalFormatter.date(from: string) { return date }
+        return Self.plainFormatter.date(from: string)
     }
+
+    // ISO8601DateFormatter is documented thread-safe; `nonisolated(unsafe)`
+    // tells Swift 6 strict concurrency to trust that.
+    nonisolated(unsafe) private static let fractionalFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    nonisolated(unsafe) private static let plainFormatter = ISO8601DateFormatter()
 
     private func metric(from payload: [String: Any]) -> UsageMetric {
         let rateLimits = payload["rate_limits"] as? [String: Any]
