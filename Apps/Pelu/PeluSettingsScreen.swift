@@ -1,8 +1,10 @@
 import PeluCore
+import PeluUI
 import SwiftUI
 import UserNotifications
 
 struct PeluSettingsScreen: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("pelu.liveActivityEnabled") private var liveActivityEnabled = false
     @AppStorage("pelu.notify.lowQuota") private var lowQuotaEnabled = false
     @AppStorage("pelu.notify.reset") private var resetEnabled = false
@@ -34,6 +36,8 @@ struct PeluSettingsScreen: View {
             .navigationTitle("設定")
             .listSectionSpacing(22)
             .contentMargins(.top, 8, for: .scrollContent)
+            .scrollContentBackground(.hidden)
+            .background(PeluTheme.background(for: colorScheme))
             .task {
                 await notifications.refreshAuthorizationStatus()
                 iCloudInfo = await CloudKitAccountChecker().info()

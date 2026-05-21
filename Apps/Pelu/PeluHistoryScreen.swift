@@ -21,6 +21,9 @@ struct PeluHistoryScreen: View {
                     content
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PeluTheme.background(for: colorScheme))
+            .scrollContentBackground(.hidden)
             .navigationTitle("歷史")
             .task { await load() }
         }
