@@ -24,6 +24,19 @@ struct CodexJSONLReader {
         latestTokenCountMatch()?.fileURL
     }
 
+    /// All jsonl files modified within `withinHours` hours — these are the
+    /// sessions that could still receive appends. We watch each one so a
+    /// background terminal's writes trigger refresh, not just the currently
+    /// active session.
+    func recentlyActiveJSONLFiles(withinHours: Double = 24) -> [URL] {
+        let cutoff = Date().addingTimeInterval(-withinHours * 3600)
+        return candidateJSONLFiles().filter { url in
+            guard let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            else { return false }
+            return mod >= cutoff
+        }
+    }
+
     func currentSessionsDirectory(now: Date = Date()) -> URL {
         let cal = Calendar.current
         let y = cal.component(.year, from: now)
@@ -195,9 +208,12 @@ final class UsageMonitor: @unchecked Sendable {
     private let claudeParser = ClaudeCodeParser()
     private let codexReader = CodexJSONLReader()
     private var fileSource: DispatchSourceFileSystemObject?
-    private var codexFileSource: DispatchSourceFileSystemObject?
+    /// Per-file FSEvent watchers keyed by absolute path. We watch every
+    /// recently-active Codex jsonl, not just the latest one, so a write in
+    /// a background terminal triggers refresh immediately instead of waiting
+    /// for the 60s timer.
+    private var codexFileSources: [String: DispatchSourceFileSystemObject] = [:]
     private var codexDirectorySource: DispatchSourceFileSystemObject?
-    private var watchedCodexFilePath: String?
     private var watchedCodexDirectoryPath: String?
     private var periodicTimer: Timer?
     // Keyed by the resetDate's `timeIntervalSince1970` rounded to nearest sec
@@ -227,7 +243,7 @@ final class UsageMonitor: @unchecked Sendable {
     deinit {
         periodicTimer?.invalidate()
         fileSource?.cancel()
-        codexFileSource?.cancel()
+        codexFileSources.values.forEach { $0.cancel() }
         codexDirectorySource?.cancel()
         resetTimers.values.forEach { $0.cancel() }
     }
@@ -249,7 +265,7 @@ final class UsageMonitor: @unchecked Sendable {
             }
 
             let codexMetric = self.codexReader.readLatestMetric()
-            let latestCodexFileURL = self.codexReader.latestTokenCountFileURL()
+            let activeCodexFiles = self.codexReader.recentlyActiveJSONLFiles()
             let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
 
             let snap = UsageSnapshot(
@@ -259,7 +275,7 @@ final class UsageMonitor: @unchecked Sendable {
             )
             DispatchQueue.main.async {
                 self.snapshot = snap
-                self.updateCodexFileWatcher(fileURL: latestCodexFileURL)
+                self.updateCodexFileWatchers(fileURLs: activeCodexFiles)
                 self.updateCodexDirectoryWatcher(directoryURL: codexSessionsDirectory)
                 self.rescheduleResetTimers(for: snap)
             }
@@ -339,36 +355,41 @@ final class UsageMonitor: @unchecked Sendable {
         fileSource = source
     }
 
-    private func updateCodexFileWatcher(fileURL: URL?) {
-        guard let fileURL else { return }
-        guard watchedCodexFilePath != fileURL.path else { return }
+    /// Reconcile our per-file FSEvent watchers against the set of currently
+    /// active Codex session files. Adds new ones, cancels stale ones, leaves
+    /// existing ones untouched. Multiple terminals writing in parallel each
+    /// trigger refresh independently.
+    private func updateCodexFileWatchers(fileURLs: [URL]) {
+        let desired = Set(fileURLs.map(\.path))
+        let current = Set(codexFileSources.keys)
 
-        codexFileSource?.cancel()
-        codexFileSource = nil
-        watchedCodexFilePath = nil
-
-        let fd = open(fileURL.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write, .extend, .rename, .delete],
-            queue: .main
-        )
-        source.setEventHandler { [weak self] in
-            guard let self else { return }
-            let flags = source.data
-            if flags.contains(.rename) || flags.contains(.delete) {
-                self.codexFileSource?.cancel()
-                self.codexFileSource = nil
-                self.watchedCodexFilePath = nil
-            }
-            self.refresh()
+        for stalePath in current.subtracting(desired) {
+            codexFileSources[stalePath]?.cancel()
+            codexFileSources.removeValue(forKey: stalePath)
         }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        codexFileSource = source
-        watchedCodexFilePath = fileURL.path
+
+        for newPath in desired.subtracting(current) {
+            let fd = open(newPath, O_EVTONLY)
+            guard fd >= 0 else { continue }
+
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd,
+                eventMask: [.write, .extend, .rename, .delete],
+                queue: .main
+            )
+            source.setEventHandler { [weak self] in
+                guard let self else { return }
+                let flags = source.data
+                if flags.contains(.rename) || flags.contains(.delete) {
+                    self.codexFileSources[newPath]?.cancel()
+                    self.codexFileSources.removeValue(forKey: newPath)
+                }
+                self.refresh()
+            }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            codexFileSources[newPath] = source
+        }
     }
 
     private func updateCodexDirectoryWatcher(directoryURL: URL) {
