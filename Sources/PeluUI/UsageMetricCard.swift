@@ -123,7 +123,7 @@ struct UsageMetricCard: View {
     let metric: UsageMetric
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 #if os(macOS)
                 VStack(alignment: .leading, spacing: 5) {
@@ -154,7 +154,7 @@ struct UsageMetricCard: View {
                 Spacer()
 
                 Text(PercentFormatter.string(from: metric.usedPercent))
-                    .font(.system(size: 42, weight: .semibold, design: .rounded))
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
             }
@@ -217,11 +217,12 @@ struct UsageMetricCard: View {
                 .padding(.top, 6)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(PeluTheme.surface(for: colorScheme))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(PeluTheme.border(for: colorScheme), lineWidth: 1)
         }
     }
