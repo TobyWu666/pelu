@@ -256,22 +256,15 @@ struct PeluMacApp: App {
         .defaultSize(width: 520, height: 460)
         .windowResizability(.contentSize)
 
-        Window("Pelu", id: PeluMacApp.dashboardWindowID) {
-            PinnedDashboardWindow(monitor: monitor)
-        }
-        .defaultSize(width: 380, height: 600)
-        .windowResizability(.contentSize)
-
         Window("Pelu 設定", id: PeluMacApp.settingsWindowID) {
-            PeluMacSettingsView()
+            PeluMacSettingsView(monitor: monitor)
         }
-        .defaultSize(width: 480, height: 460)
+        .defaultSize(width: 520, height: 560)
         .windowResizability(.contentSize)
     }
 
     static let onboardingWindowID = "pelu-onboarding"
-    static let dashboardWindowID = "pelu-dashboard"
-    static let settingsWindowID  = "pelu-settings"
+    static let settingsWindowID   = "pelu-settings"
 
     private var menuBarLabel: some View {
         HStack(spacing: 4) {
@@ -352,6 +345,12 @@ private struct MacMenuBarContent<BottomBar: View>: View {
                 .padding(.horizontal, 18)
                 .padding(.bottom, 16)
         }
+        .background(
+            // Pin the popover NSPanel so the user can't drag it around the
+            // screen. MenuBarExtra's `.window` style is an NSPanel under the
+            // hood; we walk up to it and flip isMovable off.
+            MenuBarPopoverPinner()
+        )
         .task {
             // `Window` scenes on macOS don't auto-open with MenuBarExtra apps,
             // so we trigger the onboarding window from here once per launch.
@@ -362,45 +361,38 @@ private struct MacMenuBarContent<BottomBar: View>: View {
     }
 }
 
-/// Bottom bar inside the menu bar popover. Owns its own `openWindow`
-/// environment so the pin / settings buttons can launch standalone windows.
+/// NSViewRepresentable that locks the enclosing NSWindow so it can't be
+/// dragged. Used to nail the MenuBarExtra popover to its menu bar anchor.
+private struct MenuBarPopoverPinner: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { applyPinning(from: view) }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { applyPinning(from: nsView) }
+    }
+    private func applyPinning(from view: NSView) {
+        guard let window = view.window else { return }
+        window.isMovable = false
+        window.isMovableByWindowBackground = false
+    }
+}
+
+/// Bottom bar inside the menu bar popover. Minimal — just last-updated
+/// timestamp, refresh, and settings entry. All preferences live in the
+/// dedicated Settings window now.
 private struct MacBottomBar: View {
-    @Bindable var monitor: UsageMonitor
+    let monitor: UsageMonitor
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("Menu bar")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Toggle("Claude %", isOn: $monitor.showClaude)
-                .toggleStyle(.checkbox)
-                .font(.callout)
-
-            Toggle("Codex %", isOn: $monitor.showCodex)
-                .toggleStyle(.checkbox)
-                .font(.callout)
+            Text(UpdatedAtFormatter.string(from: monitor.snapshot.generatedAt))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
             Spacer()
-
-            Button {
-                openWindow(id: PeluMacApp.dashboardWindowID)
-            } label: {
-                Image(systemName: "pin")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("固定視窗（在獨立視窗中打開 Pelu）")
-
-            Button {
-                openWindow(id: PeluMacApp.settingsWindowID)
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("設定")
 
             Button {
                 monitor.refresh()
@@ -410,21 +402,18 @@ private struct MacBottomBar: View {
             }
             .buttonStyle(.plain)
             .help("立即刷新")
+
+            Button {
+                openWindow(id: PeluMacApp.settingsWindowID)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .help("設定")
         }
         .padding(12)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
-/// Standalone (non-popover) dashboard window summoned via the pin button.
-/// Stays open until the user closes it explicitly — no auto-dismiss like
-/// the menu bar popover.
-private struct PinnedDashboardWindow: View {
-    let monitor: UsageMonitor
-
-    var body: some View {
-        PeluDashboardView(snapshot: monitor.snapshot)
-            .frame(minWidth: 380, idealWidth: 380, minHeight: 560, idealHeight: 600)
     }
 }
