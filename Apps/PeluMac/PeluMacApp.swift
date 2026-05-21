@@ -237,7 +237,9 @@ struct PeluMacApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MacMenuBarContent(monitor: monitor, bottomBar: { bottomBar })
+            MacMenuBarContent(monitor: monitor) {
+                MacBottomBar(monitor: monitor)
+            }
         } label: {
             menuBarLabel
         }
@@ -253,9 +255,23 @@ struct PeluMacApp: App {
         }
         .defaultSize(width: 520, height: 460)
         .windowResizability(.contentSize)
+
+        Window("Pelu", id: PeluMacApp.dashboardWindowID) {
+            PinnedDashboardWindow(monitor: monitor)
+        }
+        .defaultSize(width: 380, height: 600)
+        .windowResizability(.contentSize)
+
+        Window("Pelu 設定", id: PeluMacApp.settingsWindowID) {
+            PeluMacSettingsView()
+        }
+        .defaultSize(width: 480, height: 460)
+        .windowResizability(.contentSize)
     }
 
     static let onboardingWindowID = "pelu-onboarding"
+    static let dashboardWindowID = "pelu-dashboard"
+    static let settingsWindowID  = "pelu-settings"
 
     private var menuBarLabel: some View {
         HStack(spacing: 4) {
@@ -286,40 +302,6 @@ struct PeluMacApp: App {
         if monitor.showClaude, let c = claude { parts.append("C \(Int(c.rounded()))%") }
         if monitor.showCodex,  let x = codex  { parts.append("X \(Int(x.rounded()))%") }
         return parts.joined(separator: " · ")
-    }
-
-    private var bottomBar: some View {
-        HStack(spacing: 14) {
-            Text("Menu bar")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Toggle("Claude %", isOn: $monitor.showClaude)
-                .toggleStyle(.checkbox)
-                .font(.callout)
-
-            Toggle("Codex %", isOn: $monitor.showCodex)
-                .toggleStyle(.checkbox)
-                .font(.callout)
-
-            Spacer()
-
-            Text(UpdatedAtFormatter.string(from: monitor.snapshot.generatedAt))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            Button {
-                monitor.refresh()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("立即刷新（每分鐘自動更新）")
-        }
-        .padding(12)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func saveToAppGroup(_ snapshot: UsageSnapshot) {
@@ -377,5 +359,72 @@ private struct MacMenuBarContent<BottomBar: View>: View {
             didTryOpenOnboarding = true
             openWindow(id: PeluMacApp.onboardingWindowID)
         }
+    }
+}
+
+/// Bottom bar inside the menu bar popover. Owns its own `openWindow`
+/// environment so the pin / settings buttons can launch standalone windows.
+private struct MacBottomBar: View {
+    @Bindable var monitor: UsageMonitor
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Menu bar")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Toggle("Claude %", isOn: $monitor.showClaude)
+                .toggleStyle(.checkbox)
+                .font(.callout)
+
+            Toggle("Codex %", isOn: $monitor.showCodex)
+                .toggleStyle(.checkbox)
+                .font(.callout)
+
+            Spacer()
+
+            Button {
+                openWindow(id: PeluMacApp.dashboardWindowID)
+            } label: {
+                Image(systemName: "pin")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .help("固定視窗（在獨立視窗中打開 Pelu）")
+
+            Button {
+                openWindow(id: PeluMacApp.settingsWindowID)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .help("設定")
+
+            Button {
+                monitor.refresh()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .help("立即刷新")
+        }
+        .padding(12)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// Standalone (non-popover) dashboard window summoned via the pin button.
+/// Stays open until the user closes it explicitly — no auto-dismiss like
+/// the menu bar popover.
+private struct PinnedDashboardWindow: View {
+    let monitor: UsageMonitor
+
+    var body: some View {
+        PeluDashboardView(snapshot: monitor.snapshot)
+            .frame(minWidth: 380, idealWidth: 380, minHeight: 560, idealHeight: 600)
     }
 }

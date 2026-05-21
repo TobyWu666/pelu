@@ -13,6 +13,7 @@
 		100000000000000000000120 /* ClaudeHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000220 /* ClaudeHookInstaller.swift */; };
 		100000000000000000000122 /* ProviderDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000222 /* ProviderDetector.swift */; };
 		100000000000000000000123 /* MacOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000223 /* MacOnboardingView.swift */; };
+		100000000000000000000127 /* PeluMacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000227 /* PeluMacSettingsView.swift */; };
 		100000000000000000000108 /* PeluDashboardScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000204 /* PeluDashboardScreen.swift */; };
 		100000000000000000000110 /* PeluSettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000210 /* PeluSettingsScreen.swift */; };
 		100000000000000000000111 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000211 /* LiveActivityManager.swift */; };
@@ -68,6 +69,7 @@
 		100000000000000000000220 /* ClaudeHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookInstaller.swift; sourceTree = "<group>"; };
 		100000000000000000000222 /* ProviderDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderDetector.swift; sourceTree = "<group>"; };
 		100000000000000000000223 /* MacOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOnboardingView.swift; sourceTree = "<group>"; };
+		100000000000000000000227 /* PeluMacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluMacSettingsView.swift; sourceTree = "<group>"; };
 		100000000000000000000204 /* PeluDashboardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluDashboardScreen.swift; sourceTree = "<group>"; };
 		100000000000000000000205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		100000000000000000000226 /* SourceHanSerifTC-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "SourceHanSerifTC-Bold.otf"; path = "Resources/Fonts/SourceHanSerifTC-Bold.otf"; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				100000000000000000000220 /* ClaudeHookInstaller.swift */,
 				100000000000000000000222 /* ProviderDetector.swift */,
 				100000000000000000000223 /* MacOnboardingView.swift */,
+				100000000000000000000227 /* PeluMacSettingsView.swift */,
 				100000000000000000000221 /* PeluMac.entitlements */,
 			);
 			path = PeluMac;
@@ -365,6 +368,7 @@
 				100000000000000000000120 /* ClaudeHookInstaller.swift in Sources */,
 				100000000000000000000122 /* ProviderDetector.swift in Sources */,
 				100000000000000000000123 /* MacOnboardingView.swift in Sources */,
+				100000000000000000000127 /* PeluMacSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
