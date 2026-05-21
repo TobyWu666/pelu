@@ -59,10 +59,9 @@ private struct SecondaryBar: View {
 
         VStack(spacing: cycleLineGap) {
             plainUsageBar(width: usageWidth)
-            #if os(iOS)
             // Hair-thin solid blue line under the usage bar, length tracks
-            // how far through the 7-day cycle we are. Nothing fancy — just a
-            // tiny progress indicator that doesn't compete with the main bar.
+            // how far through the 7-day cycle we are. Subtle, doesn't compete
+            // with the main bar. Same treatment on iOS and macOS.
             if let outerProgress {
                 let elapsedWidth = width * min(max(outerProgress, 0), 1)
                 HStack(spacing: 0) {
@@ -72,7 +71,6 @@ private struct SecondaryBar: View {
                     Spacer(minLength: 0)
                 }
             }
-            #endif
         }
     }
 
@@ -89,13 +87,9 @@ private struct SecondaryBar: View {
     }
 
     private var barContainerHeight: CGFloat {
-        #if os(iOS)
-        return outerProgress == nil
+        outerProgress == nil
             ? secondaryBarHeight
             : secondaryBarHeight + cycleLineGap + cycleLineHeight
-        #else
-        return secondaryBarHeight
-        #endif
     }
 
     private var cycleLineHeight: CGFloat { 1 }
