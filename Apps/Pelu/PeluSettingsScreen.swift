@@ -189,9 +189,15 @@ struct PeluSettingsScreen: View {
 
     private var aboutSection: some View {
         Section("關於") {
-            LabeledContent("版本", value: "1.0.0")
+            LabeledContent("版本", value: Self.appVersion)
             LabeledContent("資料儲存位置", value: "你的 iCloud")
         }
+    }
+
+    private static var appVersion: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        return build.isEmpty ? short : "\(short) (\(build))"
     }
 
     private enum NotificationKind {

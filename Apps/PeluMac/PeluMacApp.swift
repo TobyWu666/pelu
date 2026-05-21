@@ -156,9 +156,12 @@ final class UsageMonitor: @unchecked Sendable {
         claudeFilePath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/usag-status.json")
 
-        // Install Claude Code's statusLine hook on first launch so users don't
-        // have to set it up manually. Idempotent + non-blocking.
-        ClaudeHookInstaller.installIfNeeded()
+        // NOTE: hook installation moved to onboarding (MacOnboardingView).
+        // The previous "silent install on first launch" silently overwrote
+        // any pre-existing statusLine command, which violates user trust.
+        // The Settings window's "重新安裝 Claude Code hook" button covers
+        // re-install scenarios; legitimate first-run install runs from the
+        // onboarding step where the user explicitly consents.
 
         refresh()
         startWatching()

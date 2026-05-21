@@ -64,6 +64,10 @@ public final class KeychainSecretStore: @unchecked Sendable {
         var addQuery = baseQuery
         addQuery[kSecValueData as String] = data
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // Pin to this device only — never sync the macId UUID via iCloud
+        // Keychain, otherwise two Macs would share the same identity and
+        // their CloudKit records would clobber each other.
+        addQuery[kSecAttrSynchronizable as String] = kCFBooleanFalse
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else { throw StoreError.unhandled(addStatus) }
         #else

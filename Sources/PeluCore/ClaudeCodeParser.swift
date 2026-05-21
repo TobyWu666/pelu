@@ -31,9 +31,11 @@ public struct ClaudeCodeParser: Sendable {
         // Fallback: loose key scan for older or unknown schema variants.
         // Try the rate_limits.five_hour subtree first (handles type drift like String "2.5%"
         // where the direct `as? Double` cast fails), then fall back to the whole object.
+        // Be specific — bare "percent" or "percentage" could match unrelated
+        // fields a future schema bolts on (e.g. context_window.percentage).
+        // Stick to the keys that explicitly mean "amount used".
         let percentKeys: Set<String> = [
-            "percent", "percentage", "usedpercentage", "usagepercent",
-            "usedpercent", "limitpercent",
+            "usedpercentage", "usagepercent", "usedpercent", "limitpercent",
         ]
         let usedPercent: Double? = fiveHourPercent
             ?? (fiveHour.flatMap { LooseUsageValueReader.firstDouble(in: $0, matching: percentKeys) })

@@ -57,9 +57,13 @@ enum ClaudeHookInstaller {
                 try? data.write(to: backup, options: .atomic)
             }
         }
+        // Single-quote the path so spaces / special characters in the user's
+        // home directory don't break shell parsing. Escape embedded single
+        // quotes via the classic `'\''` trick.
+        let escapedPath = hookScriptURL.path.replacingOccurrences(of: "'", with: "'\\''")
         settings["statusLine"] = [
             "type": "command",
-            "command": "/usr/bin/python3 \(hookScriptURL.path)",
+            "command": "/usr/bin/python3 '\(escapedPath)'",
         ]
         let out = try JSONSerialization.data(
             withJSONObject: settings,

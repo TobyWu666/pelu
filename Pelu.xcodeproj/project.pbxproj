@@ -23,6 +23,9 @@
 		100000000000000000000125 /* PeluHistoryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000225 /* PeluHistoryScreen.swift */; };
 		100000000000000000000109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
 		100000000000000000000126 /* SourceHanSerifTC-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000226 /* SourceHanSerifTC-Bold.otf */; };
+		100000000000000000000128 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000228 /* PrivacyInfo.xcprivacy */; };
+		100000000000000000000129 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000229 /* PrivacyInfo.xcprivacy */; };
+		200000000000000000000014 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000230 /* PrivacyInfo.xcprivacy */; };
 		10000000000000000000010A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
 		100000000000000000000104 /* PeluCore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B01 /* PeluCore */; };
 		100000000000000000000105 /* PeluUI in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B02 /* PeluUI */; };
@@ -73,6 +76,9 @@
 		100000000000000000000204 /* PeluDashboardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluDashboardScreen.swift; sourceTree = "<group>"; };
 		100000000000000000000205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		100000000000000000000226 /* SourceHanSerifTC-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "SourceHanSerifTC-Bold.otf"; path = "Resources/Fonts/SourceHanSerifTC-Bold.otf"; sourceTree = "<group>"; };
+		100000000000000000000228 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		100000000000000000000229 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		100000000000000000000230 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		100000000000000000000206 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		100000000000000000000210 /* PeluSettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluSettingsScreen.swift; sourceTree = "<group>"; };
 		100000000000000000000211 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
@@ -163,6 +169,7 @@
 				100000000000000000000224 /* iOSOnboardingView.swift */,
 				100000000000000000000225 /* PeluHistoryScreen.swift */,
 				100000000000000000000226 /* SourceHanSerifTC-Bold.otf */,
+				100000000000000000000228 /* PrivacyInfo.xcprivacy */,
 				100000000000000000000206 /* Info.plist */,
 				200000000000000000000004 /* Pelu.entitlements */,
 			);
@@ -178,6 +185,7 @@
 				100000000000000000000222 /* ProviderDetector.swift */,
 				100000000000000000000223 /* MacOnboardingView.swift */,
 				100000000000000000000227 /* PeluMacSettingsView.swift */,
+				100000000000000000000229 /* PrivacyInfo.xcprivacy */,
 				100000000000000000000221 /* PeluMac.entitlements */,
 			);
 			path = PeluMac;
@@ -197,6 +205,7 @@
 				200000000000000000000001 /* PeluWidgetBundle.swift */,
 				200000000000000000000002 /* PeluWidget.swift */,
 				200000000000000000000007 /* PeluLiveActivity.swift */,
+				100000000000000000000230 /* PrivacyInfo.xcprivacy */,
 				200000000000000000000005 /* PeluWidget.entitlements */,
 				200000000000000000000006 /* Info.plist */,
 			);
@@ -322,6 +331,7 @@
 			files = (
 				100000000000000000000109 /* Assets.xcassets in Resources */,
 				100000000000000000000126 /* SourceHanSerifTC-Bold.otf in Resources */,
+				100000000000000000000128 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,6 +340,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				10000000000000000000010A /* Assets.xcassets in Resources */,
+				100000000000000000000129 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,6 +349,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				200000000000000000000013 /* Assets.xcassets in Resources */,
+				200000000000000000000014 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -511,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -539,7 +551,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -567,7 +579,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -592,7 +604,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -618,7 +630,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -648,7 +660,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.tobywu.pelu.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

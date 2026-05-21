@@ -1,7 +1,13 @@
 import Foundation
 
 enum LooseUsageValueReader {
-    static func firstDouble(in value: Any, matching keys: Set<String>) -> Double? {
+    /// Cap recursion to defend against deeply nested JSON (defensive — the
+    /// real source is Claude Code's statusLine hook so it's not adversarial,
+    /// but a future schema bug could cause stack growth).
+    private static let maxDepth = 32
+
+    static func firstDouble(in value: Any, matching keys: Set<String>, depth: Int = 0) -> Double? {
+        if depth >= maxDepth { return nil }
         if let dictionary = value as? [String: Any] {
             for (key, child) in dictionary {
                 if keys.contains(normalized(key)), let number = double(from: child) {
@@ -10,7 +16,7 @@ enum LooseUsageValueReader {
             }
 
             for child in dictionary.values {
-                if let number = firstDouble(in: child, matching: keys) {
+                if let number = firstDouble(in: child, matching: keys, depth: depth + 1) {
                     return number
                 }
             }
@@ -18,7 +24,7 @@ enum LooseUsageValueReader {
 
         if let array = value as? [Any] {
             for child in array {
-                if let number = firstDouble(in: child, matching: keys) {
+                if let number = firstDouble(in: child, matching: keys, depth: depth + 1) {
                     return number
                 }
             }
@@ -27,7 +33,8 @@ enum LooseUsageValueReader {
         return nil
     }
 
-    static func firstDate(in value: Any, matching keys: Set<String>) -> Date? {
+    static func firstDate(in value: Any, matching keys: Set<String>, depth: Int = 0) -> Date? {
+        if depth >= maxDepth { return nil }
         if let dictionary = value as? [String: Any] {
             for (key, child) in dictionary {
                 if keys.contains(normalized(key)), let date = date(from: child) {
@@ -36,7 +43,7 @@ enum LooseUsageValueReader {
             }
 
             for child in dictionary.values {
-                if let date = firstDate(in: child, matching: keys) {
+                if let date = firstDate(in: child, matching: keys, depth: depth + 1) {
                     return date
                 }
             }
@@ -44,7 +51,7 @@ enum LooseUsageValueReader {
 
         if let array = value as? [Any] {
             for child in array {
-                if let date = firstDate(in: child, matching: keys) {
+                if let date = firstDate(in: child, matching: keys, depth: depth + 1) {
                     return date
                 }
             }
@@ -53,7 +60,8 @@ enum LooseUsageValueReader {
         return nil
     }
 
-    static func firstDecimal(in value: Any, matching keys: Set<String>) -> Decimal? {
+    static func firstDecimal(in value: Any, matching keys: Set<String>, depth: Int = 0) -> Decimal? {
+        if depth >= maxDepth { return nil }
         if let dictionary = value as? [String: Any] {
             for (key, child) in dictionary {
                 if keys.contains(normalized(key)), let decimal = decimal(from: child) {
@@ -62,7 +70,7 @@ enum LooseUsageValueReader {
             }
 
             for child in dictionary.values {
-                if let decimal = firstDecimal(in: child, matching: keys) {
+                if let decimal = firstDecimal(in: child, matching: keys, depth: depth + 1) {
                     return decimal
                 }
             }
@@ -70,7 +78,7 @@ enum LooseUsageValueReader {
 
         if let array = value as? [Any] {
             for child in array {
-                if let decimal = firstDecimal(in: child, matching: keys) {
+                if let decimal = firstDecimal(in: child, matching: keys, depth: depth + 1) {
                     return decimal
                 }
             }
