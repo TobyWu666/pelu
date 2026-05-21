@@ -4,29 +4,46 @@ import SwiftUI
 // MARK: - PeluProgressBar
 
 private struct PeluProgressBar: View {
-    let value: Double   // 0 … 1
+    let value: Double            // 0 … 1
     var tint: Color = .accentColor
+    /// When supplied, renders a 1pt sky-blue line under the main bar showing
+    /// how far through the current cycle we are. Same visual language as the
+    /// weekly bar's cycle indicator.
+    var cycleElapsed: Double? = nil
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.secondary.opacity(0.15))
-                Capsule()
-                    .fill(tint)
-                    .frame(width: geo.size.width * min(max(value, 0), 1))
-                    .animation(.easeOut(duration: 0.3), value: value)
+        VStack(spacing: cycleGap) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.secondary.opacity(0.15))
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: geo.size.width * min(max(value, 0), 1))
+                        .animation(.easeOut(duration: 0.3), value: value)
+                }
+            }
+            .frame(height: mainBarHeight)
+
+            if let cycleElapsed {
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        Rectangle()
+                            .fill(PeluTheme.sky)
+                            .frame(
+                                width: geo.size.width * min(max(cycleElapsed, 0), 1),
+                                height: cycleLineHeight
+                            )
+                        Spacer(minLength: 0)
+                    }
+                }
+                .frame(height: cycleLineHeight)
             }
         }
-        .frame(height: mainBarHeight)
     }
 
-    private var mainBarHeight: CGFloat {
-        #if os(iOS)
-        return 10
-        #else
-        return 10
-        #endif
-    }
+    private var mainBarHeight: CGFloat { 10 }
+    private var cycleLineHeight: CGFloat { 1 }
+    private var cycleGap: CGFloat { 3 }
 }
 
 // MARK: - SecondaryBar
@@ -142,53 +159,63 @@ struct UsageMetricCard: View {
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
             }
 
-            VStack(spacing: 10) {
-                PeluProgressBar(
-                    value: PercentFormatter.progress(from: metric.usedPercent),
-                    tint: metric.status.tintColor
-                )
+            // Wrap the progress bars + reset countdown text in a TimelineView
+            // so the cycle indicators (5h + weekly) and "剩 X 小時 Y 分" labels
+            // tick down locally — no fetch / silent push needed. Cadence is
+            // 1 minute, which matches ResetTimeFormatter's granularity.
+            TimelineView(.periodic(from: Date(), by: 60)) { context in
+                let now = context.date
 
-                if let weekly = metric.weeklyPercent {
-                    SecondaryBar(
-                        label: "Weekly",
-                        percent: weekly,
-                        colorScheme: colorScheme,
-                        outerProgress: weeklyElapsedProgress
+                VStack(spacing: 10) {
+                    PeluProgressBar(
+                        value: PercentFormatter.progress(from: metric.usedPercent),
+                        tint: metric.status.tintColor,
+                        cycleElapsed: fiveHourElapsedProgress(now: now)
                     )
+
+                    if let weekly = metric.weeklyPercent {
+                        SecondaryBar(
+                            label: "Weekly",
+                            percent: weekly,
+                            colorScheme: colorScheme,
+                            outerProgress: weeklyElapsedProgress(now: now)
+                        )
+                    }
+
+                    #if os(macOS)
+                    if let ctx = metric.contextWindowPercent {
+                        SecondaryBar(
+                            label: "Context",
+                            percent: ctx,
+                            colorScheme: colorScheme
+                        )
+                    }
+                    #endif
                 }
 
-                #if os(macOS)
-                if let ctx = metric.contextWindowPercent {
-                    SecondaryBar(
-                        label: "Context",
-                        percent: ctx,
-                        colorScheme: colorScheme
-                    )
+                HStack(alignment: .top) {
+                    Label(metric.status.label, systemImage: "circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(metric.status.tintColor, metric.status.tintColor)
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if let d = metric.resetDate {
+                            Text("5hr \(ResetTimeFormatter.string(from: d, now: now))")
+                        }
+                        if let d = metric.weeklyResetDate {
+                            Text("7日 \(ResetTimeFormatter.string(from: d, now: now))")
+                        }
+                        if metric.resetDate == nil && metric.weeklyResetDate == nil {
+                            Text("重置時間未定")
+                        }
+                    }
                 }
-                #endif
+                .font(.caption)
+                .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+                .padding(.top, 6)
             }
-
-            HStack(alignment: .top) {
-                Label(metric.status.label, systemImage: "circle.fill")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(metric.status.tintColor, metric.status.tintColor)
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    if let d = metric.resetDate {
-                        Text("5hr \(ResetTimeFormatter.string(from: d))")
-                    }
-                    if let d = metric.weeklyResetDate {
-                        Text("7日 \(ResetTimeFormatter.string(from: d))")
-                    }
-                    if metric.resetDate == nil && metric.weeklyResetDate == nil {
-                        Text("重置時間未定")
-                    }
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
         }
         .padding(16)
         .background(PeluTheme.surface(for: colorScheme))
@@ -215,14 +242,20 @@ struct UsageMetricCard: View {
         #endif
     }
 
-    private var weeklyElapsedProgress: Double {
+    private func fiveHourElapsedProgress(now: Date = Date()) -> Double? {
+        guard let resetDate = metric.resetDate else { return nil }
+        let windowDuration: TimeInterval = 5 * 60 * 60
+        let startDate = resetDate.addingTimeInterval(-windowDuration)
+        return clampedProgress(now.timeIntervalSince(startDate) / windowDuration)
+    }
+
+    private func weeklyElapsedProgress(now: Date = Date()) -> Double {
         if let resetDate = metric.weeklyResetDate {
             let weekDuration: TimeInterval = 7 * 24 * 60 * 60
             let startDate = resetDate.addingTimeInterval(-weekDuration)
-            return clampedProgress(Date().timeIntervalSince(startDate) / weekDuration)
+            return clampedProgress(now.timeIntervalSince(startDate) / weekDuration)
         }
 
-        let now = Date()
         guard let week = Calendar.current.dateInterval(of: .weekOfYear, for: now) else {
             return 0
         }
