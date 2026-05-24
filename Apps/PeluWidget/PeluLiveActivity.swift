@@ -72,7 +72,9 @@ private struct LockScreenView: View {
                     Text(PercentFormatter.string(from: w))
                         .font(.system(size: 9).monospacedDigit())
                         .foregroundStyle(.tertiary)
-                        .frame(width: 26, alignment: .trailing)
+                        .frame(width: 34, alignment: .trailing)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }

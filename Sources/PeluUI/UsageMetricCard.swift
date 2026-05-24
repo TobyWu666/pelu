@@ -64,7 +64,9 @@ private struct SecondaryBar: View {
             }
             .frame(height: barContainerHeight)
             Text(PercentFormatter.string(from: percent))
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: 44, alignment: .trailing)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .font(.caption2.monospacedDigit())
         .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
@@ -181,16 +183,6 @@ struct UsageMetricCard: View {
                             outerProgress: weeklyElapsedProgress(now: now)
                         )
                     }
-
-                    #if os(macOS)
-                    if let ctx = metric.contextWindowPercent {
-                        SecondaryBar(
-                            label: "Context",
-                            percent: ctx,
-                            colorScheme: colorScheme
-                        )
-                    }
-                    #endif
                 }
 
                 HStack(alignment: .top) {

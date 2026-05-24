@@ -11,6 +11,7 @@ struct iOSOnboardingView: View {
     @AppStorage("pelu.onboardingCompleted") private var onboardingCompleted = false
     @AppStorage("pelu.notify.lowQuota") private var lowQuotaEnabled = false
     @AppStorage("pelu.notify.reset") private var resetEnabled = false
+    @AppStorage("pelu.notify.weeklyReset") private var weeklyResetEnabled = false
     @AppStorage("pelu.liveActivityEnabled") private var liveActivityEnabled = false
 
     @State private var step: Step = .welcome
@@ -151,9 +152,18 @@ struct iOSOnboardingView: View {
                 }
                 Toggle(isOn: $resetEnabled) {
                     VStack(alignment: .leading) {
-                        Text("重置提醒")
+                        Text("5 小時重置提醒")
                             .font(.callout.weight(.semibold))
-                        Text("用量重置可繼續使用時提醒")
+                        Text("5 小時視窗重置時提醒")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Toggle(isOn: $weeklyResetEnabled) {
+                    VStack(alignment: .leading) {
+                        Text("每週重置提醒")
+                            .font(.callout.weight(.semibold))
+                        Text("7 天用量重置時提醒")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -1,9 +1,11 @@
 import PeluCore
 import SwiftUI
 
-/// iOS multi-Mac dashboard. Each Mac gets a section with the Mac's name plus its
-/// own Claude Code + Codex cards. Single-Mac case looks essentially the same as
-/// the legacy single-snapshot dashboard (no extra chrome to clutter).
+/// iOS dashboard. Renders one Claude card + one Codex card built from
+/// `AggregateSnapshot.displaySnapshot` — Claude / Codex independently pick
+/// the Mac with the highest 5h `usedPercent`, so multi-Mac users always see
+/// a single "worst case" number per provider. Disconnect (>5 min stale) is
+/// surfaced via the StatusPill turning red.
 public struct PeluAggregateDashboardView: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -21,12 +23,14 @@ public struct PeluAggregateDashboardView: View {
                 greetingHero
                 header
 
-                if aggregate.macs.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(aggregate.macs) { mac in
-                        macSection(mac)
+                if let display = aggregate.displaySnapshot {
+                    VStack(spacing: 12) {
+                        ForEach(display.metrics) { metric in
+                            UsageMetricCard(metric: metric)
+                        }
                     }
+                } else {
+                    emptyState
                 }
             }
             .padding(20)
@@ -76,41 +80,39 @@ public struct PeluAggregateDashboardView: View {
         return "目前最高 5 小時用量 \(Int(percent.rounded()))%"
     }
 
+    /// 5 分鐘沒新資料就視為斷線。TimelineView 每分鐘 tick 一次，所以即使
+    /// CloudKit silent push 沒回來，UI 也會自動切到斷線狀態。
+    private static let disconnectThreshold: TimeInterval = 5 * 60
+
     private var header: some View {
-        HStack {
-            if let newest = aggregate.newestGeneratedAt {
-                Text("最後更新 \(UpdatedAtFormatter.string(from: newest))")
-                    .font(.subheadline)
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            } else {
-                Text("尚未收到資料")
-                    .font(.subheadline)
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            }
-            Spacer()
-            // Pick the freshest Mac's source for the pill — they're all .cloud in practice.
-            StatusPill(source: aggregate.primary?.snapshot.source ?? .demo)
-        }
-    }
+        TimelineView(.everyMinute) { context in
+            let now = context.date
+            let newest = aggregate.newestGeneratedAt
+            let disconnected: Bool = {
+                guard let newest else { return !aggregate.macs.isEmpty }
+                return now.timeIntervalSince(newest) > Self.disconnectThreshold
+            }()
 
-    @ViewBuilder
-    private func macSection(_ mac: MacSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "desktopcomputer")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-                Text(mac.label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+            HStack {
+                if let newest {
+                    let label = disconnected
+                        ? UpdatedAtFormatter.relativeString(from: newest, now: now)
+                        : UpdatedAtFormatter.string(from: newest, now: now)
+                    Text("最後更新 \(label)")
+                        .font(.subheadline)
+                        .foregroundStyle(disconnected
+                            ? Color.red
+                            : PeluTheme.tertiaryText(for: colorScheme))
+                } else {
+                    Text("尚未收到資料")
+                        .font(.subheadline)
+                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+                }
                 Spacer()
-                Text(UpdatedAtFormatter.string(from: mac.snapshot.generatedAt))
-                    .font(.caption2)
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            }
-
-            ForEach(mac.snapshot.metrics) { metric in
-                UsageMetricCard(metric: metric)
+                StatusPill(
+                    source: aggregate.displaySnapshot?.source ?? .demo,
+                    isDisconnected: disconnected
+                )
             }
         }
     }

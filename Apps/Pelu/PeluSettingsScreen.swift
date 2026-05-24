@@ -8,6 +8,7 @@ struct PeluSettingsScreen: View {
     @AppStorage("pelu.liveActivityEnabled") private var liveActivityEnabled = false
     @AppStorage("pelu.notify.lowQuota") private var lowQuotaEnabled = false
     @AppStorage("pelu.notify.reset") private var resetEnabled = false
+    @AppStorage("pelu.notify.weeklyReset") private var weeklyResetEnabled = false
 
     @StateObject private var notifications = NotificationManager.shared
     @State private var permissionDeniedAlert = false
@@ -16,18 +17,25 @@ struct PeluSettingsScreen: View {
         userRecordName: nil
     )
     @State private var pendingLinkAlert = false
+    @State private var devices: [MacSnapshot] = []
+    @State private var isLoadingDevices = true
+    @State private var deviceErrorMessage: String?
+    @State private var deletingMacIds: Set<String> = []
 
-    /// Outbound link targets. Pointing to about:blank for now — replace with the
-    /// real URLs when the pages exist. Until then, tapping shows a "尚未開放" alert.
-    private static let privacyPolicyURL: URL? = nil
-    private static let supportCenterURL: URL? = nil
-    private static let tutorialCenterURL: URL? = nil
+    private static let syncer = CloudKitSyncer(
+        bundleVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    )
+
+    private static let privacyPolicyURL: URL? = URL(string: "https://pelu.wutoby.com/privacy.html")
+    private static let supportCenterURL: URL? = URL(string: "https://pelu.wutoby.com/support.html")
+    private static let tutorialCenterURL: URL? = URL(string: "https://pelu.wutoby.com/tutorial.html")
 
     var body: some View {
         NavigationStack {
             Form {
                 brandSection
                 iCloudSection
+                devicesSection
                 notificationsSection
                 liveActivitySection
                 resourcesSection
@@ -41,6 +49,12 @@ struct PeluSettingsScreen: View {
             .task {
                 await notifications.refreshAuthorizationStatus()
                 iCloudInfo = await CloudKitAccountChecker().info()
+                await loadDevices()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .peluUsageDidUpdate)) { _ in
+                // Dashboard 拉到新資料時，順便用本地 aggregate 把列表刷一下，
+                // 不用再多打一次 CloudKit。
+                loadDevicesFromLocal()
             }
             .alert("通知權限被拒絕", isPresented: $permissionDeniedAlert) {
                 Button("前往設定") {
@@ -87,14 +101,20 @@ struct PeluSettingsScreen: View {
                     Task { await handleToggleChange(.lowQuota, enabled: enabled) }
                 }
 
-            Toggle("重置提醒", isOn: $resetEnabled)
+            Toggle("5 小時重置提醒", isOn: $resetEnabled)
                 .onChange(of: resetEnabled) { _, enabled in
                     Task { await handleToggleChange(.reset, enabled: enabled) }
                 }
 
+            Toggle("每週重置提醒", isOn: $weeklyResetEnabled)
+                .onChange(of: weeklyResetEnabled) { _, enabled in
+                    Task { await handleToggleChange(.weeklyReset, enabled: enabled) }
+                }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("低額度警告：5 小時剩餘額度低於 10%（已使用 > 90%）時推送。")
-                Text("重置提醒：5 小時 / 每週用量重置可再使用時推送。")
+                Text("5 小時重置提醒：每個 5 小時視窗重置時通知。")
+                Text("每週重置提醒：7 天用量重置時通知。")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -120,6 +140,106 @@ struct PeluSettingsScreen: View {
         } header: {
             Text("Live Activity")
         }
+    }
+
+    private var devicesSection: some View {
+        Section {
+            if isLoadingDevices {
+                HStack {
+                    ProgressView()
+                    Text("讀取中…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else if devices.isEmpty {
+                Text("尚未偵測到 Mac")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(devices) { mac in
+                    deviceRow(mac)
+                }
+                .onDelete(perform: deleteDevices)
+            }
+        } header: {
+            Text("裝置")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                if let deviceErrorMessage {
+                    Text(deviceErrorMessage)
+                        .foregroundStyle(.orange)
+                }
+                Text("左滑可刪除已退役的 Mac。若該 Mac 仍在執行 Pelu，下次上傳時會自動重新加回列表。")
+            }
+            .font(.caption2)
+        }
+    }
+
+    private func deviceRow(_ mac: MacSnapshot) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "desktopcomputer")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(mac.label)
+                    .font(.callout.weight(.medium))
+                Text("最後更新 \(UpdatedAtFormatter.string(from: mac.snapshot.generatedAt))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if deletingMacIds.contains(mac.macId) {
+                ProgressView()
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func deleteDevices(at offsets: IndexSet) {
+        let targets = offsets.map { devices[$0] }
+        for target in targets {
+            Task { await deleteDevice(target) }
+        }
+    }
+
+    @MainActor
+    private func deleteDevice(_ mac: MacSnapshot) async {
+        deletingMacIds.insert(mac.macId)
+        defer { deletingMacIds.remove(mac.macId) }
+
+        do {
+            try await Self.syncer.deleteMac(macId: mac.macId)
+            // 立刻從清單拿掉；下次背景 fetch 還會以 CloudKit 為準。
+            devices.removeAll { $0.macId == mac.macId }
+            // 也讓 dashboard / widget 重新讀一次最新的 aggregate。
+            _ = try? await UsageSurfaceUpdater.fetchFromCloud(updateLiveActivity: false)
+            deviceErrorMessage = nil
+        } catch {
+            deviceErrorMessage = "刪除「\(mac.label)」失敗，請稍後再試。"
+        }
+    }
+
+    @MainActor
+    private func loadDevices() async {
+        isLoadingDevices = true
+        defer { isLoadingDevices = false }
+        loadDevicesFromLocal()
+        // 直接打一次 CloudKit 確保拿到最新名單（不只是 dashboard 的快取）。
+        do {
+            let aggregate = try await Self.syncer.fetchAllMacs()
+            devices = aggregate.macs
+            deviceErrorMessage = nil
+        } catch {
+            // 失敗就以本地 aggregate 為主，不覆蓋。
+            if devices.isEmpty {
+                deviceErrorMessage = "無法讀取裝置列表，請確認 iCloud 連線。"
+            }
+        }
+    }
+
+    private func loadDevicesFromLocal() {
+        guard let store = AppGroupStore(),
+              let aggregate = try? store.loadLatestAggregate() else { return }
+        devices = aggregate.macs
     }
 
     private var iCloudSection: some View {
@@ -207,12 +327,14 @@ struct PeluSettingsScreen: View {
     private enum NotificationKind {
         case lowQuota
         case reset
+        case weeklyReset
     }
 
     private func handleToggleChange(_ kind: NotificationKind, enabled: Bool) async {
         switch kind {
-        case .lowQuota: NotificationManager.shared.lowQuotaEnabled = enabled
-        case .reset:    NotificationManager.shared.resetEnabled    = enabled
+        case .lowQuota:    NotificationManager.shared.lowQuotaEnabled     = enabled
+        case .reset:       NotificationManager.shared.resetEnabled        = enabled
+        case .weeklyReset: NotificationManager.shared.weeklyResetEnabled  = enabled
         }
 
         guard enabled else { return }
@@ -226,6 +348,9 @@ struct PeluSettingsScreen: View {
             case .reset:
                 resetEnabled = false
                 NotificationManager.shared.resetEnabled = false
+            case .weeklyReset:
+                weeklyResetEnabled = false
+                NotificationManager.shared.weeklyResetEnabled = false
             }
             permissionDeniedAlert = true
         }

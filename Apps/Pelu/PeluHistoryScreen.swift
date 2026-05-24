@@ -7,6 +7,7 @@ import SwiftUI
 /// One hero stat + a bar chart, no per-row clutter.
 struct PeluHistoryScreen: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var history = UsageHistory()
     @State private var isLoading = true
 
@@ -25,14 +26,37 @@ struct PeluHistoryScreen: View {
             .background(PeluTheme.background(for: colorScheme))
             .scrollContentBackground(.hidden)
             .navigationTitle("歷史")
-            .task { await load() }
+            .task { await initialLoad() }
+            .onChange(of: scenePhase) { _, phase in
+                // 回到前景就抓最新一筆，免得切回 app 看到的是昨天的數字。
+                if phase == .active {
+                    Task { await refreshFromCloud() }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .peluUsageDidUpdate)) { _ in
+                // Dashboard 的 5 分鐘 timer / silent push / 手動 refresh 跑完都會 post，
+                // 即使歷史頁是背景 tab 也能保持資料新鮮。
+                reloadLocal()
+            }
         }
     }
 
     @MainActor
-    private func load() async {
-        isLoading = true
-        defer { isLoading = false }
+    private func initialLoad() async {
+        reloadLocal()
+        isLoading = false
+        await refreshFromCloud()
+    }
+
+    /// 主動拉一次 CloudKit。fetch 成功時 UsageSurfaceUpdater 會 post
+    /// `.peluUsageDidUpdate`，由上面的 onReceive 重讀本地檔；失敗就靜默忽略，
+    /// 既有顯示的數字不會被清掉。
+    @MainActor
+    private func refreshFromCloud() async {
+        _ = try? await UsageSurfaceUpdater.fetchFromCloud(updateLiveActivity: false)
+    }
+
+    private func reloadLocal() {
         guard let store = UsageHistoryStore() else { return }
         history = (try? store.load()) ?? UsageHistory()
     }
@@ -52,6 +76,12 @@ struct PeluHistoryScreen: View {
     /// spending in today's snapshot, so summing the raw value double-counts.
     /// Computing the day-over-day delta strips that out.
     ///
+    /// 多 Mac 註記：dashboard / widget / Live Activity 走 displaySnapshot
+    /// （per-provider 取最高），歷史頁刻意走完整 aggregate.macs，因為花費
+    /// 是真實金額、跨 Mac 應該加總，不能因為「首頁只顯示最高那台」而漏記
+    /// 其他 Mac 的開銷。刪除某台 Mac 後當天 entry 會在下次 fetch 被覆寫
+    /// 成不含該 Mac 的版本，過去的 entry 不動（歷史是過去事實）。
+    ///
     /// When the cost number *drops* between recorded days (a new session
     /// started), we treat the current day's full value as that day's spend.
     /// We can't recover any earlier sessions that finished within the same
@@ -60,23 +90,47 @@ struct PeluHistoryScreen: View {
         let sorted = history.entries.sorted { $0.date < $1.date }
         var prevByKey: [String: Decimal] = [:]
         var result: [DailyTotal] = []
+        let today = Calendar.current.startOfDay(for: Date())
 
         for entry in sorted {
             var dayTotal: Decimal = 0
+            var anyCostObserved = false
             for mac in entry.macs {
                 for metric in mac.snapshot.metrics {
                     guard let cur = metric.costTodayUSD else { continue }
+                    anyCostObserved = true
                     let key = "\(mac.macId)|\(metric.provider.rawValue)"
                     let prev = prevByKey[key] ?? 0
                     // Cost decreased → session reset → today's value is the
-                    // new session's running total. Cost grew or stayed flat →
-                    // delta is the additional spend since last record.
+                    // new session's running total. Cost grew → delta is the
+                    // additional spend since last record. Equal → either no
+                    // new work or stale data; the per-day fallback below
+                    // catches the "today" case where we'd rather show the
+                    // running cumulative than a misleading $0.
                     let delta: Decimal = cur < prev ? cur : (cur - prev)
                     dayTotal += delta
                     prevByKey[key] = cur
                 }
             }
-            if dayTotal > 0 {
+
+            let isToday = Calendar.current.isDate(entry.date, inSameDayAs: today)
+
+            // Fallback for today: when the delta math collapses to 0 but the
+            // current snapshot still has a positive cumulative, show that.
+            // Better to display the active session's running cost than to
+            // pretend today had no spend.
+            if isToday && dayTotal == 0 && anyCostObserved {
+                dayTotal = entry.macs.reduce(Decimal(0)) { acc, mac in
+                    acc + mac.snapshot.metrics.reduce(Decimal(0)) { inner, m in
+                        inner + (m.costTodayUSD ?? 0)
+                    }
+                }
+            }
+
+            // Keep today on the chart even when it sums to 0 so the bar
+            // doesn't silently disappear — users read missing bars as "Pelu
+            // is broken" instead of "no spend yet".
+            if dayTotal > 0 || isToday {
                 result.append(DailyTotal(date: entry.date, costUSD: dayTotal))
             }
         }
@@ -107,6 +161,7 @@ struct PeluHistoryScreen: View {
             }
             .padding(20)
         }
+        .refreshable { await refreshFromCloud() }
     }
 
     private var heroBlock: some View {

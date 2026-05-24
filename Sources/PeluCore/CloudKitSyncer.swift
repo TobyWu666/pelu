@@ -107,6 +107,27 @@ public actor CloudKitSyncer {
         return AggregateSnapshot(macs: collected)
     }
 
+    // MARK: - iOS side: device management
+
+    /// Delete this Mac's record from CloudKit. Used by the iOS Settings
+    /// device list so the user can retire Macs they no longer want syncing.
+    /// If the same Mac later writes a fresh snapshot, the record will simply
+    /// be re-created on next save — the deletion is not "permanent" in any
+    /// stronger sense than that.
+    public func deleteMac(macId: String) async throws {
+        let recordID = MacSnapshotRecord.recordID(forMacId: macId)
+        do {
+            _ = try await database.deleteRecord(withID: recordID)
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            // Already gone — treat as success.
+            return
+        } catch let ckError as CKError {
+            throw SyncError.ckError(ckError)
+        } catch {
+            throw SyncError.unknown(error)
+        }
+    }
+
     // MARK: - iOS side: subscription
 
     /// Subscribe to every record change so CloudKit fires a silent APNs push to

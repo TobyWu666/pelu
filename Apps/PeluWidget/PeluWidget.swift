@@ -37,12 +37,13 @@ struct PeluProvider: TimelineProvider {
     }
 
     private func cachedSnapshot() -> UsageSnapshot {
-        // Widget always shows the "primary" Mac (alphabetically first label).
-        // Multi-Mac picker would need an AppIntent configuration — future work.
+        // Widget mirrors the dashboard's "highest usage wins per provider"
+        // logic via AggregateSnapshot.displaySnapshot — Claude / Codex are
+        // picked from whichever Mac is busiest for each.
         if let store = AppGroupStore(),
            let aggregate = (try? store.loadLatestAggregate()),
-           let primary = aggregate.primary {
-            return primary.snapshot
+           let display = aggregate.displaySnapshot {
+            return display
         }
         return .demo()
     }
@@ -149,7 +150,9 @@ private struct ProviderRow: View {
                     Text(PercentFormatter.string(from: weekly))
                         .font(.system(size: 9).monospacedDigit())
                         .foregroundStyle(.tertiary)
-                        .frame(width: 28, alignment: .trailing)
+                        .frame(width: 36, alignment: .trailing)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }
@@ -271,7 +274,9 @@ private struct MediumProviderRow: View {
                     Text(PercentFormatter.string(from: weekly))
                         .font(.system(size: 10).monospacedDigit())
                         .foregroundStyle(.tertiary)
-                        .frame(width: 30, alignment: .trailing)
+                        .frame(width: 38, alignment: .trailing)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 if metric.weeklyPercent != nil && metric.resetDate != nil {
                     Text("·")

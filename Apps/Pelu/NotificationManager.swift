@@ -4,6 +4,13 @@ import UIKit
 import UserNotifications
 import WidgetKit
 
+extension Notification.Name {
+    /// Broadcast after `UsageSurfaceUpdater.fetchFromCloud` finishes writing
+    /// `usage-history.json` + `latest-aggregate-snapshot.json`. Lets passive
+    /// screens (歷史) reload from disk without running their own fetch.
+    static let peluUsageDidUpdate = Notification.Name("PeluUsageDidUpdate")
+}
+
 /// Local UNNotification authorization manager. CloudKit handles push delivery
 /// (silent pushes wake the app via subscription); this class only manages whether
 /// we're allowed to *show* local user-facing notifications for low-quota / reset
@@ -15,7 +22,8 @@ final class NotificationManager: ObservableObject {
     @Published var authorizationStatus: UNAuthorizationStatus = .notDetermined
 
     private let lowQuotaKey = "pelu.notify.lowQuota"
-    private let resetKey = "pelu.notify.reset"
+    private let resetKey = "pelu.notify.reset"             // 5 小時重置（沿用舊 key）
+    private let weeklyResetKey = "pelu.notify.weeklyReset" // 每週重置（新 key）
 
     var lowQuotaEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: lowQuotaKey) }
@@ -25,6 +33,11 @@ final class NotificationManager: ObservableObject {
     var resetEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: resetKey) }
         set { UserDefaults.standard.set(newValue, forKey: resetKey) }
+    }
+
+    var weeklyResetEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: weeklyResetKey) }
+        set { UserDefaults.standard.set(newValue, forKey: weeklyResetKey) }
     }
 
     private init() {}
@@ -91,9 +104,10 @@ enum UsageSurfaceUpdater {
         try? AppGroupStore()?.save(aggregate)
         try? UsageHistoryStore()?.record(aggregate)
         WidgetCenter.shared.reloadAllTimelines()
+        NotificationCenter.default.post(name: .peluUsageDidUpdate, object: nil)
 
-        if updateLiveActivity, let primary = aggregate.primary {
-            LiveActivityManager.shared.update(with: primary.snapshot)
+        if updateLiveActivity, let display = aggregate.displaySnapshot {
+            LiveActivityManager.shared.update(with: display)
         }
 
         // Low-quota: fire when 5h usage% crosses 90 (data-driven).
@@ -164,12 +178,14 @@ enum LocalUsageNotifier {
     }
 
     /// Pre-schedule a `UNNotificationRequest` at each Mac × provider's 5h
-    /// resetDate so the user is told the moment they can resume — no fresh
-    /// CloudKit fetch or CLI activity required. Re-adding with the same id
-    /// overwrites the pending request, so a Mac uploading a new resetDate
-    /// naturally cancels the old reminder.
+    /// AND weekly resetDate. 5 小時與每週各由獨立 toggle 控制（resetEnabled
+    /// / weeklyResetEnabled）。Re-adding with the same id overwrites the
+    /// pending request, so a Mac uploading a new resetDate naturally cancels
+    /// the old reminder.
     static func scheduleResetReminders(for aggregate: AggregateSnapshot) async {
-        guard NotificationManager.shared.resetEnabled else { return }
+        let fiveHourEnabled = NotificationManager.shared.resetEnabled
+        let weeklyEnabled = NotificationManager.shared.weeklyResetEnabled
+        guard fiveHourEnabled || weeklyEnabled else { return }
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized else { return }
@@ -177,17 +193,39 @@ enum LocalUsageNotifier {
         let now = Date()
         for mac in aggregate.macs {
             for metric in mac.snapshot.metrics {
-                guard let resetDate = metric.resetDate, resetDate > now else { continue }
-                let interval = max(1, resetDate.timeIntervalSinceNow)
-                let request = UNNotificationRequest(
-                    identifier: "reset-\(mac.macId)-\(metric.provider.rawValue)",
-                    content: notificationContent(
-                        title: "額度已重置",
-                        body: "\(mac.label) · \(metric.provider.displayName) 用量已重置，可以繼續用了。"
-                    ),
-                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-                )
-                try? await center.add(request)
+                if fiveHourEnabled,
+                   let resetDate = metric.resetDate,
+                   resetDate > now {
+                    let request = UNNotificationRequest(
+                        identifier: "reset-\(mac.macId)-\(metric.provider.rawValue)",
+                        content: notificationContent(
+                            title: "5 小時額度已重置",
+                            body: "\(mac.label) · \(metric.provider.displayName) 5 小時用量已重置，可以繼續用了。"
+                        ),
+                        trigger: UNTimeIntervalNotificationTrigger(
+                            timeInterval: max(1, resetDate.timeIntervalSinceNow),
+                            repeats: false
+                        )
+                    )
+                    try? await center.add(request)
+                }
+
+                if weeklyEnabled,
+                   let weeklyResetDate = metric.weeklyResetDate,
+                   weeklyResetDate > now {
+                    let request = UNNotificationRequest(
+                        identifier: "weeklyreset-\(mac.macId)-\(metric.provider.rawValue)",
+                        content: notificationContent(
+                            title: "每週額度已重置",
+                            body: "\(mac.label) · \(metric.provider.displayName) 每週用量已重置，可以繼續用了。"
+                        ),
+                        trigger: UNTimeIntervalNotificationTrigger(
+                            timeInterval: max(1, weeklyResetDate.timeIntervalSinceNow),
+                            repeats: false
+                        )
+                    )
+                    try? await center.add(request)
+                }
             }
         }
     }
