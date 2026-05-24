@@ -175,6 +175,7 @@ xcrun stapler staple "$APP_BUNDLE"
 # ── Gatekeeper assess ────────────────────────────────────────────────────────
 echo "==> Verify .app"
 spctl --assess --type execute --verbose=4 "$APP_BUNDLE"
+codesign --verify --deep --strict --verbose=4 "$APP_BUNDLE"
 
 # ── Build DMG ────────────────────────────────────────────────────────────────
 echo "==> Build DMG"
@@ -210,6 +211,9 @@ fi
 
 echo "==> Staple DMG"
 xcrun stapler staple "$DMG_PATH"
+
+echo "==> Verify DMG"
+spctl --assess --type install --verbose=4 "$DMG_PATH"
 
 # ── Sparkle Ed25519 signature ────────────────────────────────────────────────
 echo "==> Sparkle sign"

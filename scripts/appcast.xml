@@ -14,6 +14,27 @@
     -->
 
     <item>
+      <title>Pelu 1.0.6</title>
+      <pubDate>Sun, 24 May 2026 15:20:44 +0000</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>修正</h3>
+        <ul>
+          <li>Codex 用量改由官方 quota 資料讀取，支援 Codex 桌面版活動</li>
+          <li>改善 CloudKit 同步與重置後顯示更新的穩定性</li>
+          <li>移除監控面板重複的狀態文字</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.6/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="0Q6XDlDD0IhoqWxjh5gu9B6cuIIRCXQsDeoBH70jIgqTY91g6S8hByiI1o6CaW4sJdteDJrHi6hArir6t6F3Bw=="
+        length="2233538" />
+    </item>
+
+    <item>
       <title>Pelu 1.0.5</title>
       <pubDate>Sun, 24 May 2026 04:47:03 +0000</pubDate>
       <sparkle:version>6</sparkle:version>
