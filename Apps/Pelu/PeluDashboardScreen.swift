@@ -3,6 +3,7 @@ import PeluUI
 import SwiftUI
 
 struct PeluDashboardScreen: View {
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("pelu.liveActivityEnabled") private var liveActivityEnabled = false
     @State private var aggregate = AggregateSnapshot.demo()
     @State private var isRefreshing = false
@@ -27,6 +28,7 @@ struct PeluDashboardScreen: View {
             .navigationTitle("Pelu")
             .navigationBarTitleDisplayMode(.inline)
             .task {
+                loadCachedAggregate()
                 // Subscribe once on first appearance; CKQuerySubscription handles
                 // background updates afterwards. The fetch follows.
                 try? await Self.syncer.ensureSubscriptionRegistered()
@@ -36,6 +38,16 @@ struct PeluDashboardScreen: View {
             // CloudKit + Apple's APNs is usually <10s, so 5 minutes is plenty.
             .onReceive(Timer.publish(every: 300, on: .main, in: .common).autoconnect()) { _ in
                 Task { await refresh() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .peluUsageDidUpdate)) { _ in
+                // Silent-push refreshes are performed by AppDelegate and written
+                // to the app-group store; reflect that result without a second fetch.
+                loadCachedAggregate()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await refresh() }
+                }
             }
             .onChange(of: liveActivityEnabled) { _, enabled in
                 if enabled {
@@ -48,6 +60,12 @@ struct PeluDashboardScreen: View {
     }
 
     // MARK: - Refresh
+
+    private func loadCachedAggregate() {
+        guard let store = AppGroupStore(),
+              let cached = try? store.loadLatestAggregate() else { return }
+        aggregate = cached
+    }
 
     @MainActor
     private func refresh() async {

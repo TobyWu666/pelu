@@ -41,11 +41,13 @@ public struct CloudKitAccountChecker: Sendable {
 
     public init() {}
 
-    /// Default container, derived from the entitlement-configured CloudKit container.
-    /// Apps should pass an explicit container if they need the non-default one.
+    /// Pelu's explicit shared container. `CKContainer.default()` derives a
+    /// per-target identifier on macOS (`iCloud.org.tobywu.pelu.mac`), while
+    /// snapshots are stored in `iCloud.org.tobywu.pelu`.
     public func status(
-        container: CKContainer = .default()
+        container: CKContainer? = nil
     ) async -> Result {
+        let container = container ?? CKContainer(identifier: MacSnapshotRecord.containerIdentifier)
         do {
             let status = try await container.accountStatus()
             switch status {
@@ -65,7 +67,8 @@ public struct CloudKitAccountChecker: Sendable {
     }
 
     /// Status + the CloudKit user record name when available.
-    public func info(container: CKContainer = .default()) async -> AccountInfo {
+    public func info(container: CKContainer? = nil) async -> AccountInfo {
+        let container = container ?? CKContainer(identifier: MacSnapshotRecord.containerIdentifier)
         let status = await self.status(container: container)
         guard status == .available else {
             return AccountInfo(status: status, userRecordName: nil)

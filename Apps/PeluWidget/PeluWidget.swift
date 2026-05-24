@@ -16,36 +16,49 @@ struct PeluProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (PeluEntry) -> Void) {
-        completion(PeluEntry(date: Date(), snapshot: cachedSnapshot()))
+        let now = Date()
+        completion(PeluEntry(date: now, snapshot: cachedSnapshot(at: now)))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PeluEntry>) -> Void) {
-        // Pre-generate 6 entries spaced 15 minutes apart, all sharing the same snapshot
-        // but with different `date` values. This keeps the relative "last updated" label
-        // advancing even if no silent push reloads us. WidgetCenter.reloadAllTimelines()
-        // (triggered by the iOS app on fresh data) replaces this timeline immediately.
+        // Refresh relative labels periodically and insert exact reset-time
+        // entries so a cached CloudKit percentage drops to zero on schedule.
         let now = Date()
-        let snapshot = cachedSnapshot()
+        let aggregate = cachedAggregate()
         let calendar = Calendar.current
-        var entries: [PeluEntry] = []
+        let reload = calendar.date(byAdding: .minute, value: 90, to: now) ?? now
+        var dates: Set<Date> = []
         for offset in 0..<6 {
             let date = calendar.date(byAdding: .minute, value: offset * 15, to: now) ?? now
-            entries.append(PeluEntry(date: date, snapshot: snapshot))
+            dates.insert(date)
         }
-        let reload = calendar.date(byAdding: .minute, value: 90, to: now) ?? now
+        if let aggregate {
+            let resetDates = aggregate.macs.flatMap { mac in
+                mac.snapshot.metrics.flatMap { [$0.resetDate, $0.weeklyResetDate] }
+            }
+            for date in resetDates.compactMap({ $0 }) where date > now && date <= reload {
+                dates.insert(date)
+            }
+        }
+        let entries = dates.sorted().map { date in
+            PeluEntry(date: date, snapshot: cachedSnapshot(at: date, aggregate: aggregate))
+        }
         completion(Timeline(entries: entries, policy: .after(reload)))
     }
 
-    private func cachedSnapshot() -> UsageSnapshot {
-        // Widget mirrors the dashboard's "highest usage wins per provider"
-        // logic via AggregateSnapshot.displaySnapshot — Claude / Codex are
-        // picked from whichever Mac is busiest for each.
-        if let store = AppGroupStore(),
-           let aggregate = (try? store.loadLatestAggregate()),
-           let display = aggregate.displaySnapshot {
+    private func cachedAggregate() -> AggregateSnapshot? {
+        guard let store = AppGroupStore() else { return nil }
+        return try? store.loadLatestAggregate()
+    }
+
+    private func cachedSnapshot(at now: Date, aggregate: AggregateSnapshot? = nil) -> UsageSnapshot {
+        // Widget mirrors dashboard composition via displaySnapshot: Claude is
+        // conservative (highest usage), Codex uses the newest account quota.
+        if let aggregate = aggregate ?? cachedAggregate(),
+           let display = aggregate.displaySnapshot(at: now) {
             return display
         }
-        return .demo()
+        return .demo(now: now)
     }
 }
 

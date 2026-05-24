@@ -1,10 +1,14 @@
 import PeluCore
+import PeluUI
+import ServiceManagement
 import SwiftUI
 
 /// Standalone Settings window for the macOS app. Holds *all* user-facing
 /// preferences so the menu bar popover stays a clean glance surface.
 struct PeluMacSettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Bindable var monitor: UsageMonitor
+    @ObservedObject var updater: PeluUpdater
 
     @AppStorage("pelu.onboardingCompleted") private var onboardingCompleted = true
     @State private var iCloudInfo: CloudKitAccountChecker.AccountInfo = .init(
@@ -13,22 +17,27 @@ struct PeluMacSettingsView: View {
     )
     @State private var hookInstallToast: String?
     @State private var pendingLinkAlert = false
+    @State private var launchAtLogin: Bool = LaunchAtLogin.isEnabled
+    @State private var launchAtLoginError: String?
 
-    /// Outbound link targets. Replace with the real URLs once the pages exist;
-    /// tapping a nil one shows a "尚未開放" alert.
-    private static let privacyPolicyURL: URL? = nil
-    private static let supportCenterURL: URL? = nil
-    private static let tutorialCenterURL: URL? = nil
+    private static let privacyPolicyURL: URL? = URL(string: "https://pelu.wutoby.com/privacy.html")
+    private static let supportCenterURL: URL? = URL(string: "https://pelu.wutoby.com/support.html")
+    private static let tutorialCenterURL: URL? = URL(string: "https://pelu.wutoby.com/tutorial.html")
 
     var body: some View {
         Form {
+            brandSection
             menuBarSection
+            launchSection
             iCloudSection
+            updatesSection
             resourcesSection
             advancedSection
             aboutSection
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(PeluTheme.background(for: colorScheme))
         .frame(minWidth: 460, idealWidth: 520, minHeight: 480, idealHeight: 560)
         .task {
             iCloudInfo = await CloudKitAccountChecker().info()
@@ -41,6 +50,28 @@ struct PeluMacSettingsView: View {
         .navigationTitle("Pelu 設定")
     }
 
+    // MARK: - Brand
+
+    private var brandSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image("PeluLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Pelu")
+                        .font(.headline)
+                    Text("Usage signal for Claude Code and Codex")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
     // MARK: - Menu bar display
 
     private var menuBarSection: some View {
@@ -51,6 +82,40 @@ struct PeluMacSettingsView: View {
             Text("選單列顯示")
         } footer: {
             Text("勾選的項目會跟著 Pelu logo 一起顯示在選單列上。")
+                .font(.caption2)
+        }
+    }
+
+    // MARK: - Launch at login
+
+    private var launchSection: some View {
+        Section {
+            Toggle("登入時自動啟動 Pelu", isOn: Binding(
+                get: { launchAtLogin },
+                set: { newValue in
+                    let result = LaunchAtLogin.setEnabled(newValue)
+                    switch result {
+                    case .success:
+                        launchAtLogin = newValue
+                        launchAtLoginError = nil
+                    case .needsApproval:
+                        launchAtLogin = newValue
+                        launchAtLoginError = "已要求啟用，請在「系統設定 → 一般 → 登入項目」中允許 Pelu。"
+                    case .failure(let message):
+                        launchAtLogin = LaunchAtLogin.isEnabled
+                        launchAtLoginError = message
+                    }
+                }
+            ))
+            if let launchAtLoginError {
+                Text(launchAtLoginError)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("啟動")
+        } footer: {
+            Text("開啟後，每次登入 macOS 都會自動啟動 Pelu。可在「系統設定 → 一般 → 登入項目」中關閉。")
                 .font(.caption2)
         }
     }
@@ -93,6 +158,28 @@ struct PeluMacSettingsView: View {
         case .unknown, .unexpected: return .secondary
         }
     }
+
+    // MARK: - Updates
+
+    private var updatesSection: some View {
+        Section {
+            Toggle("自動檢查更新", isOn: Binding(
+                get: { updater.automaticallyChecksForUpdates },
+                set: { updater.automaticallyChecksForUpdates = $0 }
+            ))
+            Button("立即檢查更新…") {
+                updater.checkForUpdates()
+            }
+            .disabled(!updater.canCheckForUpdates)
+        } header: {
+            Text("更新")
+        } footer: {
+            Text("Pelu 會從 \(Self.appcastDisplayHost) 取得新版本，下載後驗證簽章再安裝。")
+                .font(.caption2)
+        }
+    }
+
+    private static let appcastDisplayHost = "pelu.wutoby.com"
 
     // MARK: - Resource links
 

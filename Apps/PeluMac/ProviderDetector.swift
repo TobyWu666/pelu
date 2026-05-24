@@ -1,4 +1,5 @@
 import Foundation
+import PeluCore
 
 /// Inspects the local Mac to see which AI CLIs are installed and whether their
 /// statusLine hook is wired up correctly. Used in onboarding to give the user
@@ -8,11 +9,20 @@ enum ProviderDetector {
         let claudeInstalled: Bool
         let claudeHookState: HookState
         let codexInstalled: Bool
+        let codexBinarySource: CodexBinarySource
         let python3Available: Bool
 
         /// True when at least one provider can be tracked. If false, the app
         /// has nothing to show.
         var hasAnyProvider: Bool { claudeInstalled || codexInstalled }
+    }
+
+    /// How we found the `codex` binary needed to spawn `app-server`. The
+    /// jsonl reader works without it; the app-server quota provider doesn't.
+    enum CodexBinarySource: Equatable {
+        case desktopApp(path: String)
+        case cli(path: String)
+        case notFound
     }
 
     /// What we found in `~/.claude/settings.json`'s `statusLine` block.
@@ -48,8 +58,21 @@ enum ProviderDetector {
             claudeInstalled: claudeInstalled,
             claudeHookState: hookState,
             codexInstalled: codexInstalled,
+            codexBinarySource: detectCodexBinarySource(),
             python3Available: detectPython3()
         )
+    }
+
+    /// Classify where `CodexAppServerClient.locateBinary()` found a binary,
+    /// so onboarding can say "using your installed Codex desktop app" vs
+    /// "using the CLI you installed via brew/npm".
+    private static func detectCodexBinarySource() -> CodexBinarySource {
+        guard let url = CodexAppServerClient.locateBinary() else { return .notFound }
+        let path = url.path
+        if path.contains(".app/Contents/Resources/codex") {
+            return .desktopApp(path: path)
+        }
+        return .cli(path: path)
     }
 
     private static func inspectClaudeHook(claudeDir: URL) -> HookState {

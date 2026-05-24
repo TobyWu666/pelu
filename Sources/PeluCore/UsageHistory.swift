@@ -43,14 +43,18 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         calendar: Calendar = .current
     ) {
         let day = calendar.startOfDay(for: now)
-        let new = HistoryEntry(date: day, macs: aggregate.macs)
 
         if let idx = entries.firstIndex(where: {
             calendar.isDate($0.date, inSameDayAs: day)
         }) {
-            entries[idx] = new
+            // Don't downgrade an already-populated entry to empty. A fetch
+            // can transiently return zero macs (CloudKit hiccup, subscription
+            // race, account flip mid-day); without this guard the chart
+            // loses today's data the moment that happens.
+            if aggregate.macs.isEmpty { return }
+            entries[idx] = HistoryEntry(date: day, macs: aggregate.macs)
         } else {
-            entries.append(new)
+            entries.append(HistoryEntry(date: day, macs: aggregate.macs))
         }
 
         entries.sort { $0.date > $1.date }

@@ -53,7 +53,7 @@ struct PeluApp: App {
                 // CloudKit subscription 在 PeluDashboardScreen.task 註冊，跟 UI 渲染同時做。
                 let manager = NotificationManager.shared
                 await manager.refreshAuthorizationStatus()
-                if manager.lowQuotaEnabled || manager.resetEnabled {
+                if manager.lowQuotaEnabled || manager.resetEnabled || manager.weeklyResetEnabled {
                     await manager.requestAuthorizationIfNeeded()
                 }
             }

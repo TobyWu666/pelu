@@ -6,6 +6,7 @@ import SwiftUI
 /// Walks the user through: welcome → iCloud check → provider detection → hook install.
 struct MacOnboardingView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage("pelu.onboardingCompleted") private var onboardingCompleted = false
 
     @State private var step: Step = .welcome
@@ -120,20 +121,25 @@ struct MacOnboardingView: View {
                     ClaudeHookInstaller.installIfNeeded()
                     let after = ProviderDetector.detect()
                     if case .peluInstalled = after.claudeHookState {
-                        onboardingCompleted = true
+                        completeAndDismiss()
                     } else {
                         hookInstallFailed = true
                     }
                     return
                 }
                 // codexOnly: skip Claude hook install entirely.
-                onboardingCompleted = true
+                completeAndDismiss()
             case .peluInstalled, .providerMissing:
-                onboardingCompleted = true
+                completeAndDismiss()
             }
         } else {
-            onboardingCompleted = true
+            completeAndDismiss()
         }
+    }
+
+    private func completeAndDismiss() {
+        onboardingCompleted = true
+        dismissWindow(id: PeluMacApp.onboardingWindowID)
     }
 
     // MARK: - Steps

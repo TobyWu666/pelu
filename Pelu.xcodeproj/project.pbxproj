@@ -3,41 +3,45 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		100000000000000000000101 /* PeluApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* PeluApp.swift */; };
 		100000000000000000000103 /* PeluMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000203 /* PeluMacApp.swift */; };
-		100000000000000000000119 /* MacIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000219 /* MacIdentity.swift */; };
-		100000000000000000000120 /* ClaudeHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000220 /* ClaudeHookInstaller.swift */; };
-		100000000000000000000122 /* ProviderDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000222 /* ProviderDetector.swift */; };
-		100000000000000000000123 /* MacOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000223 /* MacOnboardingView.swift */; };
-		100000000000000000000127 /* PeluMacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000227 /* PeluMacSettingsView.swift */; };
-		100000000000000000000108 /* PeluDashboardScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000204 /* PeluDashboardScreen.swift */; };
-		100000000000000000000110 /* PeluSettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000210 /* PeluSettingsScreen.swift */; };
-		100000000000000000000111 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000211 /* LiveActivityManager.swift */; };
-		100000000000000000000115 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000215 /* NotificationManager.swift */; };
-		100000000000000000000116 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000216 /* AppDelegate.swift */; };
-		100000000000000000000124 /* iOSOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000224 /* iOSOnboardingView.swift */; };
-		100000000000000000000125 /* PeluHistoryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000225 /* PeluHistoryScreen.swift */; };
-		100000000000000000000109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
-		100000000000000000000126 /* SourceHanSerifTC-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000226 /* SourceHanSerifTC-Bold.otf */; };
-		100000000000000000000128 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000228 /* PrivacyInfo.xcprivacy */; };
-		100000000000000000000129 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000229 /* PrivacyInfo.xcprivacy */; };
-		200000000000000000000014 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000230 /* PrivacyInfo.xcprivacy */; };
-		10000000000000000000010A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
 		100000000000000000000104 /* PeluCore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B01 /* PeluCore */; };
 		100000000000000000000105 /* PeluUI in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B02 /* PeluUI */; };
 		100000000000000000000106 /* PeluCore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B01 /* PeluCore */; };
 		100000000000000000000107 /* PeluUI in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000B02 /* PeluUI */; };
+		100000000000000000000108 /* PeluDashboardScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000204 /* PeluDashboardScreen.swift */; };
+		100000000000000000000109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
+		10000000000000000000010A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
+		100000000000000000000110 /* PeluSettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000210 /* PeluSettingsScreen.swift */; };
+		100000000000000000000111 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000211 /* LiveActivityManager.swift */; };
+		100000000000000000000115 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000215 /* NotificationManager.swift */; };
+		100000000000000000000116 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000216 /* AppDelegate.swift */; };
+		100000000000000000000119 /* MacIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000219 /* MacIdentity.swift */; };
+		100000000000000000000120 /* ClaudeHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000220 /* ClaudeHookInstaller.swift */; };
+		100000000000000000000122 /* ProviderDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000222 /* ProviderDetector.swift */; };
+		100000000000000000000123 /* MacOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000223 /* MacOnboardingView.swift */; };
+		100000000000000000000124 /* iOSOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000224 /* iOSOnboardingView.swift */; };
+		100000000000000000000125 /* PeluHistoryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000225 /* PeluHistoryScreen.swift */; };
+		100000000000000000000126 /* SourceHanSerifTC-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000226 /* SourceHanSerifTC-Bold.otf */; };
+		100000000000000000000127 /* PeluMacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000227 /* PeluMacSettingsView.swift */; };
+		100000000000000000000128 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000228 /* PrivacyInfo.xcprivacy */; };
+		100000000000000000000129 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000229 /* PrivacyInfo.xcprivacy */; };
+		100000000000000000000130 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000231 /* LaunchAtLogin.swift */; };
+		100000000000000000000131 /* AppLocationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000232 /* AppLocationHelper.swift */; };
 		200000000000000000000011 /* PeluWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* PeluWidgetBundle.swift */; };
 		200000000000000000000012 /* PeluWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* PeluWidget.swift */; };
-		200000000000000000000017 /* PeluLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* PeluLiveActivity.swift */; };
 		200000000000000000000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* Assets.xcassets */; };
 		200000000000000000000014 /* PeluCore in Frameworks */ = {isa = PBXBuildFile; productRef = 200000000000000000000051 /* PeluCore */; };
 		200000000000000000000015 /* PeluUI in Frameworks */ = {isa = PBXBuildFile; productRef = 200000000000000000000052 /* PeluUI */; };
 		200000000000000000000016 /* PeluWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* PeluWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		200000000000000000000017 /* PeluLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* PeluLiveActivity.swift */; };
+		200000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000230 /* PrivacyInfo.xcprivacy */; };
+		FAF7DF1C2FC202F4002AA27C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FAF7DF1B2FC202F4002AA27C /* Sparkle */; };
+		FAF7DF1E2FC203FF002AA27C /* PeluUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF7DF1D2FC203FF002AA27C /* PeluUpdater.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,25 +71,27 @@
 /* Begin PBXFileReference section */
 		100000000000000000000201 /* PeluApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluApp.swift; sourceTree = "<group>"; };
 		100000000000000000000203 /* PeluMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluMacApp.swift; sourceTree = "<group>"; };
-		100000000000000000000221 /* PeluMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeluMac.entitlements; sourceTree = "<group>"; };
-		100000000000000000000219 /* MacIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacIdentity.swift; sourceTree = "<group>"; };
-		100000000000000000000220 /* ClaudeHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookInstaller.swift; sourceTree = "<group>"; };
-		100000000000000000000222 /* ProviderDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderDetector.swift; sourceTree = "<group>"; };
-		100000000000000000000223 /* MacOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOnboardingView.swift; sourceTree = "<group>"; };
-		100000000000000000000227 /* PeluMacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluMacSettingsView.swift; sourceTree = "<group>"; };
 		100000000000000000000204 /* PeluDashboardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluDashboardScreen.swift; sourceTree = "<group>"; };
 		100000000000000000000205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		100000000000000000000226 /* SourceHanSerifTC-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "SourceHanSerifTC-Bold.otf"; path = "Resources/Fonts/SourceHanSerifTC-Bold.otf"; sourceTree = "<group>"; };
-		100000000000000000000228 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		100000000000000000000229 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		100000000000000000000230 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		100000000000000000000206 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		100000000000000000000210 /* PeluSettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluSettingsScreen.swift; sourceTree = "<group>"; };
 		100000000000000000000211 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		100000000000000000000215 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		100000000000000000000216 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		100000000000000000000219 /* MacIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacIdentity.swift; sourceTree = "<group>"; };
+		100000000000000000000220 /* ClaudeHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookInstaller.swift; sourceTree = "<group>"; };
+		100000000000000000000221 /* PeluMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeluMac.entitlements; sourceTree = "<group>"; };
+		100000000000000000000222 /* ProviderDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderDetector.swift; sourceTree = "<group>"; };
+		100000000000000000000223 /* MacOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOnboardingView.swift; sourceTree = "<group>"; };
 		100000000000000000000224 /* iOSOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSOnboardingView.swift; sourceTree = "<group>"; };
 		100000000000000000000225 /* PeluHistoryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluHistoryScreen.swift; sourceTree = "<group>"; };
+		100000000000000000000226 /* SourceHanSerifTC-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "SourceHanSerifTC-Bold.otf"; path = "Resources/Fonts/SourceHanSerifTC-Bold.otf"; sourceTree = "<group>"; };
+		100000000000000000000227 /* PeluMacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluMacSettingsView.swift; sourceTree = "<group>"; };
+		100000000000000000000228 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		100000000000000000000229 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		100000000000000000000230 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		100000000000000000000231 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
+		100000000000000000000232 /* AppLocationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocationHelper.swift; sourceTree = "<group>"; };
 		100000000000000000000301 /* Pelu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pelu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000302 /* PeluMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PeluMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000001 /* PeluWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluWidgetBundle.swift; sourceTree = "<group>"; };
@@ -95,6 +101,7 @@
 		200000000000000000000005 /* PeluWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeluWidget.entitlements; sourceTree = "<group>"; };
 		200000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200000000000000000000007 /* PeluLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluLiveActivity.swift; sourceTree = "<group>"; };
+		FAF7DF1D2FC203FF002AA27C /* PeluUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeluUpdater.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,6 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FAF7DF1C2FC202F4002AA27C /* Sparkle in Frameworks */,
 				100000000000000000000106 /* PeluCore in Frameworks */,
 				100000000000000000000107 /* PeluUI in Frameworks */,
 			);
@@ -179,12 +187,15 @@
 		100000000000000000000505 /* PeluMac */ = {
 			isa = PBXGroup;
 			children = (
+				FAF7DF1D2FC203FF002AA27C /* PeluUpdater.swift */,
 				100000000000000000000203 /* PeluMacApp.swift */,
 				100000000000000000000219 /* MacIdentity.swift */,
 				100000000000000000000220 /* ClaudeHookInstaller.swift */,
 				100000000000000000000222 /* ProviderDetector.swift */,
 				100000000000000000000223 /* MacOnboardingView.swift */,
 				100000000000000000000227 /* PeluMacSettingsView.swift */,
+				100000000000000000000231 /* LaunchAtLogin.swift */,
+				100000000000000000000232 /* AppLocationHelper.swift */,
 				100000000000000000000229 /* PrivacyInfo.xcprivacy */,
 				100000000000000000000221 /* PeluMac.entitlements */,
 			);
@@ -254,6 +265,7 @@
 			packageProductDependencies = (
 				100000000000000000000B01 /* PeluCore */,
 				100000000000000000000B02 /* PeluUI */,
+				FAF7DF1B2FC202F4002AA27C /* Sparkle */,
 			);
 			productName = PeluMac;
 			productReference = 100000000000000000000302 /* PeluMac.app */;
@@ -312,6 +324,7 @@
 			mainGroup = 100000000000000000000501;
 			packageReferences = (
 				100000000000000000000B00 /* XCLocalSwiftPackageReference "." */,
+				FAF7DF1A2FC202F4002AA27C /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			productRefGroup = 100000000000000000000503 /* Products */;
 			projectDirPath = "";
@@ -349,7 +362,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				200000000000000000000013 /* Assets.xcassets in Resources */,
-				200000000000000000000014 /* PrivacyInfo.xcprivacy in Resources */,
+				200000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -375,12 +388,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FAF7DF1E2FC203FF002AA27C /* PeluUpdater.swift in Sources */,
 				100000000000000000000103 /* PeluMacApp.swift in Sources */,
 				100000000000000000000119 /* MacIdentity.swift in Sources */,
 				100000000000000000000120 /* ClaudeHookInstaller.swift in Sources */,
 				100000000000000000000122 /* ProviderDetector.swift in Sources */,
 				100000000000000000000123 /* MacOnboardingView.swift in Sources */,
 				100000000000000000000127 /* PeluMacSettingsView.swift in Sources */,
+				100000000000000000000130 /* LaunchAtLogin.swift in Sources */,
+				100000000000000000000131 /* AppLocationHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -510,7 +526,6 @@
 		100000000000000000000A03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/Pelu/Pelu.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -538,7 +553,6 @@
 		100000000000000000000A04 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/Pelu/Pelu.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -566,14 +580,14 @@
 		100000000000000000000A05 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = Apps/PeluMac/PeluMac.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/PeluMac/PeluMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N6Z3T6D6NF;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = PeluMac;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Apps/PeluMac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -591,14 +605,14 @@
 		100000000000000000000A06 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = Apps/PeluMac/PeluMac.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/PeluMac/PeluMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N6Z3T6D6NF;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = PeluMac;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Apps/PeluMac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -616,7 +630,6 @@
 		200000000000000000000061 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/PeluWidget/PeluWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -646,7 +659,6 @@
 		200000000000000000000062 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/PeluWidget/PeluWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -721,6 +733,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		FAF7DF1A2FC202F4002AA27C /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		100000000000000000000B01 /* PeluCore */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -741,6 +764,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 100000000000000000000B00 /* XCLocalSwiftPackageReference "." */;
 			productName = PeluUI;
+		};
+		FAF7DF1B2FC202F4002AA27C /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FAF7DF1A2FC202F4002AA27C /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

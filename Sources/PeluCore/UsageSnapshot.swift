@@ -38,6 +38,15 @@ public struct UsageSnapshot: Codable, Equatable, Sendable, Identifiable {
         metrics.first { $0.provider == provider }
     }
 
+    public func effective(at now: Date = Date()) -> UsageSnapshot {
+        UsageSnapshot(
+            id: id,
+            generatedAt: generatedAt,
+            source: source,
+            metrics: metrics.map { $0.effective(at: now) }
+        )
+    }
+
     public static func demo(now: Date = Date()) -> UsageSnapshot {
         UsageSnapshot(
             generatedAt: now,

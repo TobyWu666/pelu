@@ -34,12 +34,15 @@ public struct AggregateSnapshot: Codable, Equatable, Sendable {
         macs.map(\.snapshot.generatedAt).max()
     }
 
-    /// Composite snapshot: each provider's metric comes from whichever Mac
-    /// reports the highest 5h `usedPercent` for that provider. Dashboard,
-    /// Widget, and Live Activity all render this so the user sees a single
-    /// "worst case" number per provider regardless of how many Macs they own.
-    /// Claude and Codex are picked independently — different Macs can win.
+    /// Composite snapshot for Dashboard, Widget, and Live Activity. Claude
+    /// retains the conservative highest-usage behavior. Codex quota from the
+    /// app-server is account-wide, so choosing an older higher number leaves
+    /// the UI stuck above a later reset; choose its newest measurement instead.
     public var displaySnapshot: UsageSnapshot? {
+        displaySnapshot(at: Date())
+    }
+
+    public func displaySnapshot(at now: Date) -> UsageSnapshot? {
         guard !macs.isEmpty else { return nil }
 
         var metrics: [UsageMetric] = []
@@ -50,11 +53,21 @@ public struct AggregateSnapshot: Codable, Equatable, Sendable {
             let candidates: [(metric: UsageMetric, generatedAt: Date, source: ConnectionSource)] =
                 macs.compactMap { mac in
                     guard let metric = mac.snapshot.metric(for: provider) else { return nil }
-                    return (metric, mac.snapshot.generatedAt, mac.snapshot.source)
+                    return (metric.effective(at: now), mac.snapshot.generatedAt, mac.snapshot.source)
                 }
-            guard let winner = candidates.max(by: {
-                ($0.metric.usedPercent ?? -1) < ($1.metric.usedPercent ?? -1)
-            }) else { continue }
+            let winner: (metric: UsageMetric, generatedAt: Date, source: ConnectionSource)?
+            if provider == .codex {
+                winner = candidates.max(by: {
+                    let left = $0.metric.measuredAt ?? $0.generatedAt
+                    let right = $1.metric.measuredAt ?? $1.generatedAt
+                    return left < right
+                })
+            } else {
+                winner = candidates.max(by: {
+                    ($0.metric.usedPercent ?? -1) < ($1.metric.usedPercent ?? -1)
+                })
+            }
+            guard let winner else { continue }
 
             metrics.append(winner.metric)
             latestGenerated = max(latestGenerated, winner.generatedAt)

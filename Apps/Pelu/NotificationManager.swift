@@ -100,14 +100,19 @@ enum UsageSurfaceUpdater {
         // diff and fire local notifications for low-quota / reset crossings.
         let previousAggregate = try? AppGroupStore()?.loadLatestAggregate()
         let aggregate = try await syncer.fetchAllMacs()
+        let now = Date()
 
         try? AppGroupStore()?.save(aggregate)
-        try? UsageHistoryStore()?.record(aggregate)
+        _ = try? UsageHistoryStore()?.record(aggregate)
         WidgetCenter.shared.reloadAllTimelines()
         NotificationCenter.default.post(name: .peluUsageDidUpdate, object: nil)
 
-        if updateLiveActivity, let display = aggregate.displaySnapshot {
-            LiveActivityManager.shared.update(with: display)
+        if updateLiveActivity {
+            if let display = aggregate.displaySnapshot(at: now) {
+                LiveActivityManager.shared.update(with: display)
+            } else {
+                LiveActivityManager.shared.end()
+            }
         }
 
         // Low-quota: fire when 5h usage% crosses 90 (data-driven).
@@ -148,13 +153,17 @@ enum LocalUsageNotifier {
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized else { return }
 
+        let now = Date()
         let prevByMac = Dictionary(uniqueKeysWithValues: previous.macs.map { ($0.macId, $0) })
         for mac in current.macs {
             let prevMetrics: [ProviderKind: UsageMetric] = prevByMac[mac.macId].map {
-                Dictionary(uniqueKeysWithValues: $0.snapshot.metrics.map { ($0.provider, $0) })
+                Dictionary(uniqueKeysWithValues: $0.snapshot.metrics.map {
+                    ($0.provider, $0.effective(at: now))
+                })
             } ?? [:]
 
-            for metric in mac.snapshot.metrics {
+            for storedMetric in mac.snapshot.metrics {
+                let metric = storedMetric.effective(at: now)
                 guard let curUsed = metric.usedPercent, curUsed > lowQuotaThreshold else { continue }
 
                 // Skip if previous reading was already over the threshold — we've
@@ -228,6 +237,25 @@ enum LocalUsageNotifier {
                 }
             }
         }
+    }
+
+    static func cancelLowQuotaWarnings() async {
+        await cancelPendingRequests(withPrefix: "lowquota-")
+    }
+
+    static func cancelFiveHourResetReminders() async {
+        await cancelPendingRequests(withPrefix: "reset-")
+    }
+
+    static func cancelWeeklyResetReminders() async {
+        await cancelPendingRequests(withPrefix: "weeklyreset-")
+    }
+
+    private static func cancelPendingRequests(withPrefix prefix: String) async {
+        let center = UNUserNotificationCenter.current()
+        let requests = await center.pendingNotificationRequests()
+        let identifiers = requests.map(\.identifier).filter { $0.hasPrefix(prefix) }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
     private static func notificationContent(title: String, body: String) -> UNNotificationContent {

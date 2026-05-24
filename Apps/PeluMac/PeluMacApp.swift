@@ -17,7 +17,7 @@ struct CodexJSONLReader {
         guard let match = latestTokenCountMatch() else {
             return UsageMetric(provider: .codex, usedPercent: nil, note: "今日無 Codex 使用紀錄")
         }
-        return metric(from: match.payload)
+        return metric(from: match.payload, measuredAt: match.timestamp)
     }
 
     func latestTokenCountFileURL() -> URL? {
@@ -156,7 +156,7 @@ struct CodexJSONLReader {
 
     nonisolated(unsafe) private static let plainFormatter = ISO8601DateFormatter()
 
-    private func metric(from payload: [String: Any]) -> UsageMetric {
+    private func metric(from payload: [String: Any], measuredAt: Date) -> UsageMetric {
         let rateLimits = payload["rate_limits"] as? [String: Any]
         let primary = rateLimits?["primary"] as? [String: Any]
         let secondary = rateLimits?["secondary"] as? [String: Any]
@@ -184,7 +184,9 @@ struct CodexJSONLReader {
             usedPercent: primaryPercent,
             weeklyPercent: weeklyPercent,
             resetDate: resetDate,
-            weeklyResetDate: weeklyResetDate
+            weeklyResetDate: weeklyResetDate,
+            dataSource: .localEstimate,
+            measuredAt: measuredAt
         )
     }
 }
@@ -207,6 +209,18 @@ final class UsageMonitor: @unchecked Sendable {
     private let claudeFilePath: URL
     private let claudeParser = ClaudeCodeParser()
     private let codexReader = CodexJSONLReader()
+    /// Serial queue for refresh work. The previous `.global(qos: .utility)`
+    /// was concurrent — when init's first refresh raced with the provider's
+    /// onUpdate-triggered second refresh, the slower (jsonl) task could
+    /// dispatch its main-thread write *after* the faster (RPC) one, leaving
+    /// the UI on the localEstimate metric and surfacing the "估算" badge.
+    private let refreshQueue = DispatchQueue(label: "org.tobywu.pelu.refresh", qos: .utility)
+    private let codexQuotaProvider = CodexQuotaProvider(
+        clientInfo: .init(
+            name: "Pelu",
+            version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        )
+    )
     private var fileSource: DispatchSourceFileSystemObject?
     /// Per-file FSEvent watchers keyed by absolute path. We watch every
     /// recently-active Codex jsonl, not just the latest one, so a write in
@@ -235,6 +249,16 @@ final class UsageMonitor: @unchecked Sendable {
         // re-install scenarios; legitimate first-run install runs from the
         // onboarding step where the user explicitly consents.
 
+        // Codex app-server pushes server-initiated quota updates and gives us
+        // canonical numbers that survive across machines / non-CLI Codex
+        // entry points. Wire it before the first refresh so an early read
+        // can hit it. The jsonl reader stays as a fallback when the binary
+        // isn't installed or the daemon hasn't initialized yet.
+        codexQuotaProvider.onUpdate = { [weak self] _ in
+            self?.refresh()
+        }
+        codexQuotaProvider.start()
+
         refresh()
         startWatching()
         startPeriodicRefresh()
@@ -246,10 +270,18 @@ final class UsageMonitor: @unchecked Sendable {
         codexFileSources.values.forEach { $0.cancel() }
         codexDirectorySource?.cancel()
         resetTimers.values.forEach { $0.cancel() }
+        codexQuotaProvider.stop()
+    }
+
+    /// Forward "user / system seems to care about Codex right now" signals to
+    /// the quota provider so it doesn't fall back to idle cadence. Called
+    /// from jsonl FSEvents handlers and from popover-becomes-key.
+    func markCodexActive() {
+        codexQuotaProvider.markActive()
     }
 
     func refresh() {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        refreshQueue.async { [weak self] in
             guard let self else { return }
 
             let claudeMetric: UsageMetric
@@ -264,7 +296,27 @@ final class UsageMonitor: @unchecked Sendable {
                 )
             }
 
-            let codexMetric = self.codexReader.readLatestMetric()
+            // Prefer app-server quota while it is fresh. If RPC has been
+            // stale for five minutes and JSONL has a newer observation, use
+            // that estimate until the provider reconnects.
+            let codexMetric: UsageMetric
+            if let snapshot = self.codexQuotaProvider.latestSnapshot() {
+                let official = snapshot.asUsageMetric()
+                let officialIsStale = Date().timeIntervalSince(snapshot.fetchedAt) >= 300
+                if officialIsStale {
+                    let localEstimate = self.codexReader.readLatestMetric()
+                    if let localMeasuredAt = localEstimate.measuredAt,
+                       localMeasuredAt > snapshot.fetchedAt {
+                        codexMetric = localEstimate
+                    } else {
+                        codexMetric = official
+                    }
+                } else {
+                    codexMetric = official
+                }
+            } else {
+                codexMetric = self.codexReader.readLatestMetric()
+            }
             let activeCodexFiles = self.codexReader.recentlyActiveJSONLFiles()
             let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
 
@@ -384,6 +436,10 @@ final class UsageMonitor: @unchecked Sendable {
                     self.codexFileSources[newPath]?.cancel()
                     self.codexFileSources.removeValue(forKey: newPath)
                 }
+                // jsonl write = real Codex activity on this machine. Bump
+                // the provider to active so its next read is quick (60s)
+                // instead of waiting for the idle cadence (20 min).
+                self.codexQuotaProvider.markActive()
                 self.refresh()
             }
             source.setCancelHandler { close(fd) }
@@ -419,6 +475,9 @@ final class UsageMonitor: @unchecked Sendable {
                 self.codexDirectorySource = nil
                 self.watchedCodexDirectoryPath = nil
             }
+            // New jsonl appearing in today's sessions/ dir = fresh Codex
+            // session just started. Treat as activity.
+            self.codexQuotaProvider.markActive()
             self.refresh()
         }
         source.setCancelHandler { close(fd) }
@@ -440,14 +499,45 @@ final class UsageMonitor: @unchecked Sendable {
     }
 }
 
+/// Serializes CloudKit writes and collapses bursts of local refresh events to
+/// the newest pending snapshot. JSONL sessions can append many times while one
+/// network save is in flight; saving every intermediate value causes record
+/// change-tag conflicts without improving what the phone ultimately displays.
+private actor CloudSnapshotUploader {
+    private let syncer: CloudKitSyncer
+    private var pending: MacSnapshot?
+    private var isUploading = false
+
+    init(bundleVersion: String) {
+        syncer = CloudKitSyncer(bundleVersion: bundleVersion)
+    }
+
+    func submit(_ snapshot: MacSnapshot) async {
+        pending = snapshot
+        guard !isUploading else { return }
+        isUploading = true
+        defer { isUploading = false }
+
+        while let next = pending {
+            pending = nil
+            do {
+                try await syncer.save(next)
+            } catch {
+                print("Pelu CloudKit save failed: \(error)")
+            }
+        }
+    }
+}
+
 // MARK: - App
 
 @main
 struct PeluMacApp: App {
     @State private var monitor = UsageMonitor()
-    @State private var syncer = CloudKitSyncer(
+    @State private var uploader = CloudSnapshotUploader(
         bundleVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     )
+    @StateObject private var updater = PeluUpdater()
 
     var body: some Scene {
         MenuBarExtra {
@@ -471,7 +561,8 @@ struct PeluMacApp: App {
         .windowResizability(.contentSize)
 
         Window("Pelu 設定", id: PeluMacApp.settingsWindowID) {
-            PeluMacSettingsView(monitor: monitor)
+            PeluMacSettingsView(monitor: monitor, updater: updater)
+                .background(FloatingWindowConfigurator())
         }
         .defaultSize(width: 520, height: 560)
         .windowResizability(.contentSize)
@@ -530,11 +621,7 @@ struct PeluMacApp: App {
             snapshot: snapshot
         )
         Task {
-            do {
-                try await syncer.save(mac)
-            } catch {
-                print("Pelu CloudKit save failed: \(error)")
-            }
+            await uploader.submit(mac)
         }
     }
 }
@@ -559,11 +646,19 @@ private struct MacMenuBarContent<BottomBar: View>: View {
             }
             .background(
                 // Pin the popover NSPanel so the user can't drag it around the
-                // screen. MenuBarExtra's `.window` style is an NSPanel under
-                // the hood; we lock it the moment it gets a window.
-                MenuBarPopoverPinner()
+                // screen, and bump the Codex quota provider out of idle every
+                // time the user opens us. MenuBarExtra's `.window` style is
+                // an NSPanel; both behaviors hook off its NSWindow lifecycle.
+                MenuBarPopoverPinner(onWindowBecomeKey: {
+                    monitor.markCodexActive()
+                })
             )
             .task {
+                // Run the location check once per launch. Must happen before
+                // onboarding so a translocated app gets relocated first — TCC
+                // won't remember any grants the user makes while translocated.
+                AppLocationHelper.warnIfNeeded()
+
                 // `Window` scenes on macOS don't auto-open with MenuBarExtra
                 // apps, so we trigger the onboarding window from here once.
                 guard !didTryOpenOnboarding, !onboardingCompleted else { return }
@@ -574,19 +669,72 @@ private struct MacMenuBarContent<BottomBar: View>: View {
 }
 
 /// NSViewRepresentable that locks the enclosing NSPanel so it can't be
-/// dragged. Subclassed NSView used so we can override `viewDidMoveToWindow`
-/// — that hook fires synchronously the moment the view enters a window,
-/// which is more reliable than DispatchQueue.main.async would be.
+/// dragged, and fires `onWindowBecomeKey` each time the popover opens.
+///
+/// The "becomes key" hook beats SwiftUI's `.onAppear` here — MenuBarExtra's
+/// `.window` style caches its hosted view, so onAppear only fires on the
+/// first open. NSWindow.didBecomeKeyNotification fires on every open.
 private struct MenuBarPopoverPinner: NSViewRepresentable {
-    func makeNSView(context: Context) -> PinningView { PinningView() }
-    func updateNSView(_ nsView: PinningView, context: Context) {}
+    var onWindowBecomeKey: () -> Void = {}
+
+    func makeNSView(context: Context) -> PinningView {
+        let v = PinningView()
+        v.onWindowBecomeKey = onWindowBecomeKey
+        return v
+    }
+    func updateNSView(_ nsView: PinningView, context: Context) {
+        nsView.onWindowBecomeKey = onWindowBecomeKey
+    }
 
     final class PinningView: NSView {
+        var onWindowBecomeKey: () -> Void = {}
+        private var keyObserver: NSObjectProtocol?
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            // Tear down any observer from the previous window (view can be
+            // detached then re-attached during SwiftUI updates).
+            if let token = keyObserver {
+                NotificationCenter.default.removeObserver(token)
+                keyObserver = nil
+            }
             guard let window else { return }
             window.isMovable = false
             window.isMovableByWindowBackground = false
+
+            keyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.onWindowBecomeKey()
+                }
+            }
+        }
+
+        // viewDidMoveToWindow(nil) handles teardown when the view leaves a
+        // window; that's the normal path for an NSView in a MenuBarExtra
+        // popover. A nonisolated deinit can't touch NSObjectProtocol under
+        // Swift 6 strict concurrency, and the worst case (view dropped
+        // without leaving a window first) is a stale observer block that
+        // hits a `[weak self]` nil and no-ops.
+    }
+}
+
+/// Pins the host NSWindow to `.floating` level so the Settings window stays
+/// above every other app's windows. Same trick as `MenuBarPopoverPinner` —
+/// `viewDidMoveToWindow` is the synchronous moment we get a real window ref.
+private struct FloatingWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> FloatingHostView { FloatingHostView() }
+    func updateNSView(_ nsView: FloatingHostView, context: Context) {}
+
+    final class FloatingHostView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.level = .floating
+            window.collectionBehavior.insert(.moveToActiveSpace)
         }
     }
 }

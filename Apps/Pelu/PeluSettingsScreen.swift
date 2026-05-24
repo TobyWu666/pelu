@@ -337,7 +337,14 @@ struct PeluSettingsScreen: View {
         case .weeklyReset: NotificationManager.shared.weeklyResetEnabled  = enabled
         }
 
-        guard enabled else { return }
+        guard enabled else {
+            switch kind {
+            case .lowQuota:    await LocalUsageNotifier.cancelLowQuotaWarnings()
+            case .reset:       await LocalUsageNotifier.cancelFiveHourResetReminders()
+            case .weeklyReset: await LocalUsageNotifier.cancelWeeklyResetReminders()
+            }
+            return
+        }
 
         let granted = await NotificationManager.shared.requestAuthorizationIfNeeded()
         if !granted {

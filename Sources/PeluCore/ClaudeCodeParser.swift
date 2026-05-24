@@ -75,7 +75,14 @@ public struct ClaudeCodeParser: Sendable {
             costTodayUSD: costFallback,
             resetDate: resetFallback,
             weeklyResetDate: weeklyResetDate,
-            note: resolvedUsed == nil ? "Claude status JSON 尚未包含可辨識百分比" : nil
+            note: resolvedUsed == nil ? "Claude status JSON 尚未包含可辨識百分比" : nil,
+            // Claude Code's statusLine hook writes the live rate_limits the
+            // server just returned, so it's as authoritative as Codex's RPC.
+            dataSource: .officialQuota,
+            // Approximate measuredAt with file read time. The hook writes
+            // atomically on every Claude interaction, so file mtime ≈
+            // last-real-activity time, which is what we want to report.
+            measuredAt: generatedAt
         )
     }
 }

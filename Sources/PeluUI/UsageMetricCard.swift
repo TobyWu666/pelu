@@ -125,6 +125,15 @@ struct UsageMetricCard: View {
     let metric: UsageMetric
 
     var body: some View {
+        // A CloudKit value may remain cached after its source window resets.
+        // Re-project the whole card every minute, including the headline and
+        // status tint, so it reaches 0% without waiting for a new upload.
+        TimelineView(.periodic(from: Date(), by: 60)) { context in
+            card(metric: metric.effective(at: context.date), now: context.date)
+        }
+    }
+
+    private func card(metric: UsageMetric, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 #if os(macOS)
@@ -133,23 +142,12 @@ struct UsageMetricCard: View {
                         providerIcon
                         providerTitle
                     }
-
-                    Text(metric.note ?? metric.status.label)
-                        .font(.callout)
-                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
                 }
                 #else
                 HStack(alignment: .center, spacing: 10) {
                     providerIcon
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        providerTitle
-
-                        Text(metric.note ?? metric.status.label)
-                            .font(.caption)
-                            .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-                            .lineLimit(1)
-                    }
+                    providerTitle
                 }
                 #endif
 
@@ -161,53 +159,66 @@ struct UsageMetricCard: View {
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
             }
 
-            // Wrap the progress bars + reset countdown text in a TimelineView
-            // so the cycle indicators (5h + weekly) and "剩 X 小時 Y 分" labels
-            // tick down locally — no fetch / silent push needed. Cadence is
-            // 1 minute, which matches ResetTimeFormatter's granularity.
-            TimelineView(.periodic(from: Date(), by: 60)) { context in
-                let now = context.date
+            VStack(spacing: 10) {
+                PeluProgressBar(
+                    value: PercentFormatter.progress(from: metric.usedPercent),
+                    tint: metric.status.tintColor,
+                    cycleElapsed: fiveHourElapsedProgress(now: now)
+                )
 
-                VStack(spacing: 10) {
-                    PeluProgressBar(
-                        value: PercentFormatter.progress(from: metric.usedPercent),
-                        tint: metric.status.tintColor,
-                        cycleElapsed: fiveHourElapsedProgress(now: now)
+                if let weekly = metric.weeklyPercent {
+                    SecondaryBar(
+                        label: "Weekly",
+                        percent: weekly,
+                        colorScheme: colorScheme,
+                        outerProgress: weeklyElapsedProgress(now: now)
                     )
-
-                    if let weekly = metric.weeklyPercent {
-                        SecondaryBar(
-                            label: "Weekly",
-                            percent: weekly,
-                            colorScheme: colorScheme,
-                            outerProgress: weeklyElapsedProgress(now: now)
-                        )
-                    }
                 }
+            }
 
-                HStack(alignment: .top) {
+            HStack(alignment: .top) {
+                HStack(spacing: 6) {
                     Label(metric.status.label, systemImage: "circle.fill")
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(metric.status.tintColor, metric.status.tintColor)
 
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        if let d = metric.resetDate {
-                            Text("5hr \(ResetTimeFormatter.string(from: d, now: now))")
+                    // Both the "估算" badge and the "更新於 X 分鐘前" text
+                    // surface together only when the measurement is
+                    // older than 5 min. Fresh values stay silent.
+                    if isStale(measuredAt: metric.measuredAt, now: now) {
+                        if metric.dataSource == .localEstimate {
+                            Text("估算")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(
+                                    Capsule().fill(PeluTheme.amber.opacity(0.18))
+                                )
+                                .foregroundStyle(PeluTheme.amber)
                         }
-                        if let d = metric.weeklyResetDate {
-                            Text("7日 \(ResetTimeFormatter.string(from: d, now: now))")
-                        }
-                        if metric.resetDate == nil && metric.weeklyResetDate == nil {
-                            Text("重置時間未定")
+                        if let staleText = stalenessText(measuredAt: metric.measuredAt, now: now) {
+                            Text(staleText).foregroundStyle(PeluTheme.amber)
                         }
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-                .padding(.top, 6)
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let d = metric.resetDate {
+                        Text("5hr \(ResetTimeFormatter.string(from: d, now: now))")
+                    }
+                    if let d = metric.weeklyResetDate {
+                        Text("7日 \(ResetTimeFormatter.string(from: d, now: now))")
+                    }
+                    if metric.resetDate == nil && metric.weeklyResetDate == nil {
+                        Text("重置時間未定")
+                    }
+                }
             }
+            .font(.caption)
+            .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+            .padding(.top, 6)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -257,6 +268,29 @@ struct UsageMetricCard: View {
 
     private func clampedProgress(_ value: Double) -> Double {
         min(max(value, 0), 1)
+    }
+
+    /// Returns "更新於 X 分鐘前" once the measurement is ≥ 5 min old. Below
+    /// that we treat the value as fresh enough — Codex RPC polls every 60s
+    /// in active mode, and even the Claude/jsonl path is realistic within
+    /// 5 min of the last interaction. Matches plan §13's stale threshold.
+    private func stalenessText(measuredAt: Date?, now: Date) -> String? {
+        guard let measuredAt, isStale(measuredAt: measuredAt, now: now) else { return nil }
+        let elapsed = now.timeIntervalSince(measuredAt)
+        let minutes = Int(elapsed / 60)
+        let hours = minutes / 60
+        if hours >= 1 {
+            return hours >= 24 ? "更新於 \(hours / 24) 天前" : "更新於 \(hours) 小時前"
+        }
+        return "更新於 \(minutes) 分鐘前"
+    }
+
+    /// True when the measurement is old enough that the user should question
+    /// whether it reflects current reality (≥ 5 min). Drives both the "估算"
+    /// badge and the "更新於" text — fresh data shows neither.
+    private func isStale(measuredAt: Date?, now: Date) -> Bool {
+        guard let measuredAt else { return false }
+        return now.timeIntervalSince(measuredAt) >= 300
     }
 
     @ViewBuilder

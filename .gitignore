@@ -2,7 +2,9 @@
 .swiftpm/
 DerivedData/
 build-release/
+build-release-ios/
 build/
+dist/
 *.xcuserstate
 xcuserdata/
 .DS_Store

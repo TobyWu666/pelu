@@ -1,0 +1,125 @@
+<?xml version="1.0" standalone="yes"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Pelu Mac</title>
+    <link>https://pelu.wutoby.com/appcast.xml</link>
+    <description>Pelu Mac 更新頻道</description>
+    <language>zh-Hant</language>
+
+    <!--
+      Each release: ./scripts/release.sh <version> <build> prints a <item>
+      block — paste it directly above this comment (newest first).
+    -->
+
+    <item>
+      <title>Pelu 1.0.5</title>
+      <pubDate>Sun, 24 May 2026 04:47:03 +0000</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>新增</h3>
+        <ul>
+          <li>「登入時自動啟動 Pelu」設定選項（設定 → 啟動）</li>
+          <li>偵測到 Pelu 不在「應用程式」資料夾時會提示移動，避免 macOS 重複詢問檔案存取權限</li>
+        </ul>
+        <h3>修正</h3>
+        <ul>
+          <li>首次設定最後一步點「完成」時，視窗現在會自動關閉</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.5/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="upXg+KxHWV/rAoDg9zayMVT46ePWc/Fd3eMmPUp2ijLehcog5lHCIobrQoKIbkFFI6UfzfbXcN3K2Bsw47zADQ=="
+        length="2018644" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.4</title>
+      <pubDate>Sat, 23 May 2026 17:46:56 +0000</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <ul>
+          <li>DMG 排版整理：背景圖支援 retina，icon 對齊箭頭</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.4/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="eaKCtQW6hDwqFGnltG/MiWfKMaMiYhi4U+kJDxk4+Y5A24VCo+1CnEF1uvFiBJbdX496GLZJO/Cxn8s9VxECBQ=="
+        length="2007188" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.3</title>
+      <pubDate>Sat, 23 May 2026 17:28:32 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <ul>
+          <li>修正：開始畫面點「開始」立刻崩潰（重簽主 app 時 entitlements 缺 application-identifier）</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.3/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="huu+W0719p7g4T3F6vNwSPPU84xGkOdtQ/zpe332yqvKEDokkJ/bVmSy9UA+OUkXkoI2Z4onWMCoAOzPK10DBg=="
+        length="1989290" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.2</title>
+      <pubDate>Sat, 23 May 2026 17:09:31 +0000</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>自動更新通道測試版本。</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.2/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="1CM449iybIV/KlDxw9HuC7SHybhmORRAbl+0cVXVE01LLmVuX/q+1GiCSGZ3UyS9ukvSTK6SMCGrbZ2knf88Bw=="
+        length="1989698" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.1</title>
+      <pubDate>Sat, 23 May 2026 17:01:12 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <ul>
+          <li>修正：開啟「設定」視窗會崩潰</li>
+          <li>DMG 視窗背景右邊白邊消失</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.1/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="AVM14qHgDJmNLNagSFeC8em5MJPQl/EHqKKp10lTCXTWwSoT5EWhgtwsWPO1TNJt9Hs2UddLSsBKf9TS+5WiCg=="
+        length="1989713" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.0</title>
+      <pubDate>Sat, 23 May 2026 16:22:07 +0000</pubDate>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.0/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="JWZLMX6nttgJuj7671BPzwtNIxAxuK2/SXs2jl8qtTK5cCbKqSs4CtNJ/M6Lr/BAsODwXWSH77Rt3bguigliDA=="
+        length="1993463" />
+    </item>
+
+  </channel>
+</rss>

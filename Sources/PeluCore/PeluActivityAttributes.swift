@@ -10,6 +10,7 @@ public struct PeluActivityAttributes: ActivityAttributes {
         public var claudeResetDate: Date?
         public var codexPercent: Double?
         public var codexWeeklyPercent: Double?
+        public var codexResetDate: Date?
         public var codexWeeklyResetDate: Date?
         public var updatedAt: Date
 
@@ -20,6 +21,7 @@ public struct PeluActivityAttributes: ActivityAttributes {
             claudeResetDate: Date?,
             codexPercent: Double?,
             codexWeeklyPercent: Double?,
+            codexResetDate: Date? = nil,
             codexWeeklyResetDate: Date? = nil,
             updatedAt: Date = Date()
         ) {
@@ -29,6 +31,7 @@ public struct PeluActivityAttributes: ActivityAttributes {
             self.claudeResetDate = claudeResetDate
             self.codexPercent = codexPercent
             self.codexWeeklyPercent = codexWeeklyPercent
+            self.codexResetDate = codexResetDate
             self.codexWeeklyResetDate = codexWeeklyResetDate
             self.updatedAt = updatedAt
         }
@@ -43,9 +46,27 @@ public struct PeluActivityAttributes: ActivityAttributes {
                 claudeResetDate: claude?.resetDate,
                 codexPercent: codex?.usedPercent,
                 codexWeeklyPercent: codex?.weeklyPercent,
+                codexResetDate: codex?.resetDate,
                 codexWeeklyResetDate: codex?.weeklyResetDate,
                 updatedAt: snapshot.generatedAt
             )
+        }
+
+        public func effective(at now: Date = Date()) -> ContentState {
+            var state = self
+            if state.claudePercent != nil, let reset = state.claudeResetDate, reset <= now {
+                state.claudePercent = 0
+            }
+            if state.claudeWeeklyPercent != nil, let reset = state.claudeWeeklyResetDate, reset <= now {
+                state.claudeWeeklyPercent = 0
+            }
+            if state.codexPercent != nil, let reset = state.codexResetDate, reset <= now {
+                state.codexPercent = 0
+            }
+            if state.codexWeeklyPercent != nil, let reset = state.codexWeeklyResetDate, reset <= now {
+                state.codexWeeklyPercent = 0
+            }
+            return state
         }
     }
 

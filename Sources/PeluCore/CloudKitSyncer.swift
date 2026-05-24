@@ -30,10 +30,24 @@ public actor CloudKitSyncer {
     // MARK: - Mac side: save snapshot
 
     /// Upsert this Mac's snapshot. We first try to fetch the existing record so
-    /// we can carry its `recordChangeTag` (CKRecord optimistic locking) and avoid
-    /// the "server already has a newer copy" error on subsequent saves.
-    /// On not-found we create fresh.
+    /// we can carry its `recordChangeTag` (CKRecord optimistic locking). If
+    /// another writer wins between our fetch and save, fetch its new change tag
+    /// and retry once with this newest local snapshot.
     public func save(_ mac: MacSnapshot) async throws {
+        do {
+            try await saveAttempt(mac)
+        } catch let ckError as CKError where Self.isRecordConflict(ckError) {
+            do {
+                try await saveAttempt(mac)
+            } catch {
+                throw Self.wrap(error)
+            }
+        } catch {
+            throw Self.wrap(error)
+        }
+    }
+
+    private func saveAttempt(_ mac: MacSnapshot) async throws {
         let recordID = MacSnapshotRecord.recordID(forMacId: mac.macId)
 
         let existing: CKRecord?
@@ -41,10 +55,6 @@ public actor CloudKitSyncer {
             existing = try await database.record(for: recordID)
         } catch let ckError as CKError where ckError.code == .unknownItem {
             existing = nil // first upload for this Mac
-        } catch let ckError as CKError {
-            throw SyncError.ckError(ckError)
-        } catch {
-            throw SyncError.unknown(error)
         }
 
         let record: CKRecord
@@ -58,13 +68,21 @@ public actor CloudKitSyncer {
             throw SyncError.recordEncodeFailed(error)
         }
 
-        do {
-            _ = try await database.save(record)
-        } catch let ckError as CKError {
-            throw SyncError.ckError(ckError)
-        } catch {
-            throw SyncError.unknown(error)
-        }
+        _ = try await database.save(record)
+    }
+
+    private static func isRecordConflict(_ error: CKError) -> Bool {
+        if error.code == .serverRecordChanged { return true }
+        guard error.code == .partialFailure else { return false }
+        return error.partialErrorsByItemID?.values.contains {
+            ($0 as? CKError)?.code == .serverRecordChanged
+        } ?? false
+    }
+
+    private static func wrap(_ error: Error) -> SyncError {
+        if let syncError = error as? SyncError { return syncError }
+        if let ckError = error as? CKError { return .ckError(ckError) }
+        return .unknown(error)
     }
 
     // MARK: - iOS side: fetch aggregate
@@ -85,17 +103,22 @@ public actor CloudKitSyncer {
 
         var collected: [MacSnapshot] = []
         do {
-            let (matchResults, _) = try await database.records(matching: query)
-            for (_, result) in matchResults {
-                switch result {
-                case .success(let record):
-                    if let mac = try? MacSnapshotRecord.decode(record) {
-                        collected.append(mac)
+            var (matchResults, cursor) = try await database.records(matching: query)
+            while true {
+                for (_, result) in matchResults {
+                    switch result {
+                    case .success(let record):
+                        if let mac = try? MacSnapshotRecord.decode(record) {
+                            collected.append(mac)
+                        }
+                    case .failure:
+                        // Skip individual broken records; don't fail the whole fetch.
+                        continue
                     }
-                case .failure:
-                    // Skip individual broken records; don't fail the whole fetch.
-                    continue
                 }
+
+                guard let nextCursor = cursor else { break }
+                (matchResults, cursor) = try await database.records(continuingMatchFrom: nextCursor)
             }
         } catch let ckError as CKError {
             throw SyncError.ckError(ckError)

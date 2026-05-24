@@ -2,10 +2,9 @@ import PeluCore
 import SwiftUI
 
 /// iOS dashboard. Renders one Claude card + one Codex card built from
-/// `AggregateSnapshot.displaySnapshot` — Claude / Codex independently pick
-/// the Mac with the highest 5h `usedPercent`, so multi-Mac users always see
-/// a single "worst case" number per provider. Disconnect (>5 min stale) is
-/// surfaced via the StatusPill turning red.
+/// `AggregateSnapshot.displaySnapshot` — Claude shows the highest reported
+/// use while account-wide Codex quota shows its newest measurement.
+/// Disconnect (>5 min stale) is surfaced via the StatusPill turning red.
 public struct PeluAggregateDashboardView: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -23,14 +22,16 @@ public struct PeluAggregateDashboardView: View {
                 greetingHero
                 header
 
-                if let display = aggregate.displaySnapshot {
-                    VStack(spacing: 12) {
-                        ForEach(display.metrics) { metric in
-                            UsageMetricCard(metric: metric)
+                TimelineView(.everyMinute) { context in
+                    if let display = aggregate.displaySnapshot(at: context.date) {
+                        VStack(spacing: 12) {
+                            ForEach(display.metrics) { metric in
+                                UsageMetricCard(metric: metric)
+                            }
                         }
+                    } else {
+                        emptyState
                     }
-                } else {
-                    emptyState
                 }
             }
             .padding(20)
@@ -54,12 +55,12 @@ public struct PeluAggregateDashboardView: View {
     private var greetingHero: some View {
         TimelineView(.everyMinute) { context in
             VStack(alignment: .leading, spacing: 6) {
-                Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent))
+                Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent(at: context.date)))
                     .font(.custom("SourceHanSerifTC-Bold", size: 28, relativeTo: .title))
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(subheading)
+                Text(subheading(at: context.date))
                     .font(.subheadline)
                     .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
             }
@@ -68,15 +69,14 @@ public struct PeluAggregateDashboardView: View {
         }
     }
 
-    /// Highest 5h used% across all Macs / providers — the "how busy are you
-    /// right now" signal that drives the greeting tone.
-    private var busiestUsedPercent: Double? {
-        let allUsed = aggregate.macs.flatMap { $0.snapshot.metrics.compactMap(\.usedPercent) }
-        return allUsed.max()
+    /// Highest displayed 5h usage. Use the same composite metrics as the
+    /// cards, so a stale Codex record cannot contradict a newer reset below.
+    private func busiestUsedPercent(at now: Date) -> Double? {
+        aggregate.displaySnapshot(at: now)?.metrics.compactMap(\.usedPercent).max()
     }
 
-    private var subheading: String {
-        guard let percent = busiestUsedPercent else { return "尚無資料" }
+    private func subheading(at now: Date) -> String {
+        guard let percent = busiestUsedPercent(at: now) else { return "尚無資料" }
         return "目前最高 5 小時用量 \(Int(percent.rounded()))%"
     }
 
@@ -110,7 +110,7 @@ public struct PeluAggregateDashboardView: View {
                 }
                 Spacer()
                 StatusPill(
-                    source: aggregate.displaySnapshot?.source ?? .demo,
+                    source: aggregate.displaySnapshot(at: now)?.source ?? .demo,
                     isDisconnected: disconnected
                 )
             }

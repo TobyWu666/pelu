@@ -10,6 +10,12 @@ private struct LockScreenView: View {
     let state: PeluActivityAttributes.ContentState
 
     var body: some View {
+        TimelineView(.periodic(from: Date(), by: 60)) { context in
+            content(state: state.effective(at: context.date))
+        }
+    }
+
+    private func content(state: PeluActivityAttributes.ContentState) -> some View {
         HStack(spacing: 20) {
             providerBlock(
                 label: "Claude Code",
@@ -107,29 +113,35 @@ struct PeluLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Claude")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(PercentFormatter.string(from: context.state.claudePercent))
-                            .font(.system(.title2, design: .rounded).weight(.bold))
-                            .monospacedDigit()
-                            .foregroundStyle(UsageStatus.from(percent: context.state.claudePercent).tintColor)
+                    TimelineView(.periodic(from: Date(), by: 60)) { clock in
+                        let state = context.state.effective(at: clock.date)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Claude")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(PercentFormatter.string(from: state.claudePercent))
+                                .font(.system(.title2, design: .rounded).weight(.bold))
+                                .monospacedDigit()
+                                .foregroundStyle(UsageStatus.from(percent: state.claudePercent).tintColor)
+                        }
+                        .padding(.leading, 6)
                     }
-                    .padding(.leading, 6)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("Codex")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(PercentFormatter.string(from: context.state.codexPercent))
-                            .font(.system(.title2, design: .rounded).weight(.bold))
-                            .monospacedDigit()
-                            .foregroundStyle(UsageStatus.from(percent: context.state.codexPercent).tintColor)
+                    TimelineView(.periodic(from: Date(), by: 60)) { clock in
+                        let state = context.state.effective(at: clock.date)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Codex")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(PercentFormatter.string(from: state.codexPercent))
+                                .font(.system(.title2, design: .rounded).weight(.bold))
+                                .monospacedDigit()
+                                .foregroundStyle(UsageStatus.from(percent: state.codexPercent).tintColor)
+                        }
+                        .padding(.trailing, 6)
                     }
-                    .padding(.trailing, 6)
                 }
 
                 DynamicIslandExpandedRegion(.center) {
@@ -139,10 +151,13 @@ struct PeluLiveActivity: Widget {
             } compactLeading: {
                 LogoView(size: 14)
             } compactTrailing: {
-                Text(PercentFormatter.string(from: context.state.claudePercent))
-                    .font(.system(.caption, design: .rounded).weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(UsageStatus.from(percent: context.state.claudePercent).tintColor)
+                TimelineView(.periodic(from: Date(), by: 60)) { clock in
+                    let state = context.state.effective(at: clock.date)
+                    Text(PercentFormatter.string(from: state.claudePercent))
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(UsageStatus.from(percent: state.claudePercent).tintColor)
+                }
             } minimal: {
                 LogoView(size: 12)
             }
