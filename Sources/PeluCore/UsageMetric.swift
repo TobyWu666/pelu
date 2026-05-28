@@ -39,6 +39,12 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
     /// independently — one can be 30s fresh while the other is 2h cold.
     /// Optional for backward compat with pre-1.1 payloads.
     public let measuredAt: Date?
+    /// Token totals from Codex JSONL (sum across all active sessions).
+    /// Only populated for `.codex`; iOS uses `CodexPricing.estimateUSD` to
+    /// derive an API-equivalent spend for the history chart. nil for
+    /// Claude (Claude has `cost.total_cost_usd` in `costTodayUSD`) and
+    /// for legacy payloads written before v1.0.7.
+    public let tokenUsage: CodexTokenUsage?
 
     public var id: ProviderKind { provider }
 
@@ -53,7 +59,8 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
         status: UsageStatus? = nil,
         note: String? = nil,
         dataSource: UsageDataSource? = nil,
-        measuredAt: Date? = nil
+        measuredAt: Date? = nil,
+        tokenUsage: CodexTokenUsage? = nil
     ) {
         self.provider = provider
         self.usedPercent = usedPercent
@@ -66,6 +73,7 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
         self.note = note
         self.dataSource = dataSource
         self.measuredAt = measuredAt
+        self.tokenUsage = tokenUsage
     }
 
     /// Values received from CloudKit can legitimately outlive their quota
@@ -89,7 +97,28 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             weeklyResetDate: weeklyResetDate,
             note: note,
             dataSource: dataSource,
-            measuredAt: measuredAt
+            measuredAt: measuredAt,
+            tokenUsage: tokenUsage
+        )
+    }
+
+    /// Return a copy with `tokenUsage` replaced. Used by PeluMac to attach
+    /// JSONL-derived token sums to a metric whose percentages came from
+    /// the Codex RPC path (RPC doesn't expose raw counts).
+    public func attachingTokenUsage(_ tokenUsage: CodexTokenUsage?) -> UsageMetric {
+        UsageMetric(
+            provider: provider,
+            usedPercent: usedPercent,
+            weeklyPercent: weeklyPercent,
+            contextWindowPercent: contextWindowPercent,
+            costTodayUSD: costTodayUSD,
+            resetDate: resetDate,
+            weeklyResetDate: weeklyResetDate,
+            status: status,
+            note: note,
+            dataSource: dataSource,
+            measuredAt: measuredAt,
+            tokenUsage: tokenUsage
         )
     }
 }

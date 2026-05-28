@@ -64,8 +64,12 @@ public struct UsageSnapshot: Codable, Equatable, Sendable, Identifiable {
                     provider: .codex,
                     usedPercent: 10,
                     weeklyPercent: 23,
-                    costTodayUSD: Decimal(string: "1.12"),
-                    resetDate: Calendar.current.date(byAdding: .hour, value: 9, to: now)
+                    resetDate: Calendar.current.date(byAdding: .hour, value: 9, to: now),
+                    tokenUsage: CodexTokenUsage(
+                        inputTokens: 480_000,
+                        cachedInputTokens: 420_000,
+                        outputTokens: 32_000
+                    )
                 ),
             ]
         )

@@ -52,6 +52,7 @@ struct PeluApp: App {
                 // 設定頁 toggle 已開時自動續展 UNNotification 授權狀態。
                 // CloudKit subscription 在 PeluDashboardScreen.task 註冊，跟 UI 渲染同時做。
                 let manager = NotificationManager.shared
+                await LocalUsageNotifier.cancelLegacyPerMacResetReminders()
                 await manager.refreshAuthorizationStatus()
                 if manager.lowQuotaEnabled || manager.resetEnabled || manager.weeklyResetEnabled {
                     await manager.requestAuthorizationIfNeeded()

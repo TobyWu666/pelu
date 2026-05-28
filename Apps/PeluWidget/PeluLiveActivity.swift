@@ -51,36 +51,25 @@ private struct LockScreenView: View {
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(PercentFormatter.string(from: percent))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(status.tintColor)
-            }
+            Text(PercentFormatter.string(from: percent))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(status.tintColor)
+                .lineLimit(1)
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.secondary.opacity(0.15))
-                    Capsule()
-                        .fill(status.tintColor)
-                        .frame(width: geo.size.width * PercentFormatter.progress(from: percent))
-                }
-            }
-            .frame(height: 4)
+            UsageBar(percent: percent, tint: status.tintColor, height: 4)
 
             if let w = weekly {
-                HStack(spacing: 3) {
-                    Text("Weekly").font(.system(size: 9)).foregroundStyle(.tertiary)
-                    WeeklyCycleBar(
-                        weeklyPercent: w,
-                        weeklyResetDate: weeklyResetDate
-                    )
-                    Text(PercentFormatter.string(from: w))
-                        .font(.system(size: 9).monospacedDigit())
+                HStack(spacing: 6) {
+                    Text("週")
+                        .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.tertiary)
-                        .frame(width: 34, alignment: .trailing)
+                    UsageBar(percent: w, tint: status.tintColor.opacity(0.55), height: 3)
+                    Text(PercentFormatter.string(from: w))
+                        .font(.system(size: 9, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 30, alignment: .trailing)
                         .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }

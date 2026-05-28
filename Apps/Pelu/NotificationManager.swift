@@ -122,9 +122,8 @@ enum UsageSurfaceUpdater {
             from: previousAggregate ?? AggregateSnapshot(macs: []),
             to: aggregate
         )
-        // Reset: pre-schedule a UNNotification at each future resetDate so the
-        // user gets pinged at the exact moment they can resume — no dependency
-        // on a fresh CloudKit fetch or CLI activity.
+        // Reset: schedule reminders from the same composite shown on the
+        // dashboard so several Macs cannot each generate a duplicate alert.
         await LocalUsageNotifier.scheduleResetReminders(for: aggregate)
 
         return aggregate
@@ -137,13 +136,14 @@ enum UsageSurfaceUpdater {
 enum LocalUsageNotifier {
     private static let lowQuotaThreshold: Double = 90
 
-    /// Fire when 5h `usedPercent` enters the >90% zone for a given Mac × provider.
+    /// Fire when the dashboard's displayed 5h `usedPercent` enters the >90%
+    /// zone for a provider.
     /// Triggers on:
     ///   - first observation that's already over the threshold (no previous data)
     ///   - upward crossing from ≤90 to >90
     /// Does NOT trigger on:
     ///   - sustained values above threshold (previous was also >90 — already alerted)
-    /// Per-Mac × per-provider; honors the user's `lowQuotaEnabled` toggle.
+    /// Per-provider only; honors the user's `lowQuotaEnabled` toggle.
     static func notifyLowQuotaCrossings(
         from previous: AggregateSnapshot,
         to current: AggregateSnapshot
@@ -154,87 +154,82 @@ enum LocalUsageNotifier {
         guard settings.authorizationStatus == .authorized else { return }
 
         let now = Date()
-        let prevByMac = Dictionary(uniqueKeysWithValues: previous.macs.map { ($0.macId, $0) })
-        for mac in current.macs {
-            let prevMetrics: [ProviderKind: UsageMetric] = prevByMac[mac.macId].map {
-                Dictionary(uniqueKeysWithValues: $0.snapshot.metrics.map {
-                    ($0.provider, $0.effective(at: now))
-                })
-            } ?? [:]
-
-            for storedMetric in mac.snapshot.metrics {
-                let metric = storedMetric.effective(at: now)
-                guard let curUsed = metric.usedPercent, curUsed > lowQuotaThreshold else { continue }
-
-                // Skip if previous reading was already over the threshold — we've
-                // either already alerted, or the user has been informed via UI.
-                if let prevUsed = prevMetrics[metric.provider]?.usedPercent,
-                   prevUsed > lowQuotaThreshold {
-                    continue
-                }
-
-                let request = UNNotificationRequest(
-                    identifier: "lowquota-\(mac.macId)-\(metric.provider.rawValue)",
-                    content: notificationContent(
-                        title: "額度即將用完",
-                        body: "\(mac.label) · \(metric.provider.displayName) 5 小時剩餘額度低於 10%。"
-                    ),
-                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-                )
-                try? await center.add(request)
+        let previousMetrics = Dictionary(
+            uniqueKeysWithValues: (previous.displaySnapshot(at: now)?.metrics ?? []).map {
+                ($0.provider, $0)
             }
+        )
+        guard let display = current.displaySnapshot(at: now) else { return }
+
+        for metric in display.metrics {
+            guard let curUsed = metric.usedPercent, curUsed > lowQuotaThreshold else { continue }
+
+            // Skip if the displayed value was already over the threshold.
+            if let prevUsed = previousMetrics[metric.provider]?.usedPercent,
+               prevUsed > lowQuotaThreshold {
+                continue
+            }
+
+            let request = UNNotificationRequest(
+                identifier: "lowquota-\(metric.provider.rawValue)",
+                content: notificationContent(
+                    title: "額度即將用完",
+                    body: "\(metric.provider.displayName) 5 小時剩餘額度低於 10%。"
+                ),
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            )
+            try? await center.add(request)
         }
     }
 
-    /// Pre-schedule a `UNNotificationRequest` at each Mac × provider's 5h
-    /// AND weekly resetDate. 5 小時與每週各由獨立 toggle 控制（resetEnabled
-    /// / weeklyResetEnabled）。Re-adding with the same id overwrites the
-    /// pending request, so a Mac uploading a new resetDate naturally cancels
-    /// the old reminder.
+    /// Pre-schedule a single request per displayed provider's 5h and weekly
+    /// reset dates. The dashboard snapshot is authoritative: pending requests
+    /// from a previous per-Mac version or a prior winner are replaced on sync.
     static func scheduleResetReminders(for aggregate: AggregateSnapshot) async {
         let fiveHourEnabled = NotificationManager.shared.resetEnabled
         let weeklyEnabled = NotificationManager.shared.weeklyResetEnabled
+        await cancelPendingRequests(withPrefix: "reset-")
+        await cancelPendingRequests(withPrefix: "weeklyreset-")
         guard fiveHourEnabled || weeklyEnabled else { return }
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized else { return }
 
         let now = Date()
-        for mac in aggregate.macs {
-            for metric in mac.snapshot.metrics {
-                if fiveHourEnabled,
-                   let resetDate = metric.resetDate,
-                   resetDate > now {
-                    let request = UNNotificationRequest(
-                        identifier: "reset-\(mac.macId)-\(metric.provider.rawValue)",
-                        content: notificationContent(
-                            title: "5 小時額度已重置",
-                            body: "\(mac.label) · \(metric.provider.displayName) 5 小時用量已重置，可以繼續用了。"
-                        ),
-                        trigger: UNTimeIntervalNotificationTrigger(
-                            timeInterval: max(1, resetDate.timeIntervalSinceNow),
-                            repeats: false
-                        )
+        guard let display = aggregate.displaySnapshot(at: now) else { return }
+        for metric in display.metrics {
+            if fiveHourEnabled,
+               let resetDate = metric.resetDate,
+               resetDate > now {
+                let request = UNNotificationRequest(
+                    identifier: "reset-\(metric.provider.rawValue)",
+                    content: notificationContent(
+                        title: "5 小時額度已重置",
+                        body: "\(metric.provider.displayName) 5 小時用量已重置，可以繼續用了。"
+                    ),
+                    trigger: UNTimeIntervalNotificationTrigger(
+                        timeInterval: max(1, resetDate.timeIntervalSinceNow),
+                        repeats: false
                     )
-                    try? await center.add(request)
-                }
+                )
+                try? await center.add(request)
+            }
 
-                if weeklyEnabled,
-                   let weeklyResetDate = metric.weeklyResetDate,
-                   weeklyResetDate > now {
-                    let request = UNNotificationRequest(
-                        identifier: "weeklyreset-\(mac.macId)-\(metric.provider.rawValue)",
-                        content: notificationContent(
-                            title: "每週額度已重置",
-                            body: "\(mac.label) · \(metric.provider.displayName) 每週用量已重置，可以繼續用了。"
-                        ),
-                        trigger: UNTimeIntervalNotificationTrigger(
-                            timeInterval: max(1, weeklyResetDate.timeIntervalSinceNow),
-                            repeats: false
-                        )
+            if weeklyEnabled,
+               let weeklyResetDate = metric.weeklyResetDate,
+               weeklyResetDate > now {
+                let request = UNNotificationRequest(
+                    identifier: "weeklyreset-\(metric.provider.rawValue)",
+                    content: notificationContent(
+                        title: "每週額度已重置",
+                        body: "\(metric.provider.displayName) 每週用量已重置，可以繼續用了。"
+                    ),
+                    trigger: UNTimeIntervalNotificationTrigger(
+                        timeInterval: max(1, weeklyResetDate.timeIntervalSinceNow),
+                        repeats: false
                     )
-                    try? await center.add(request)
-                }
+                )
+                try? await center.add(request)
             }
         }
     }
@@ -249,6 +244,24 @@ enum LocalUsageNotifier {
 
     static func cancelWeeklyResetReminders() async {
         await cancelPendingRequests(withPrefix: "weeklyreset-")
+    }
+
+    /// Versions before display-based notifications stored one reset request
+    /// per Mac (`reset-<macId>-<provider>`). Drop those at launch so an
+    /// upgraded install cannot deliver duplicates before its next cloud fetch.
+    static func cancelLegacyPerMacResetReminders() async {
+        let center = UNUserNotificationCenter.current()
+        let requests = await center.pendingNotificationRequests()
+        let validDisplayIDs = Set(
+            ProviderKind.allCases.flatMap { provider in
+                ["reset-\(provider.rawValue)", "weeklyreset-\(provider.rawValue)"]
+            }
+        )
+        let identifiers = requests.map(\.identifier).filter {
+            ($0.hasPrefix("reset-") || $0.hasPrefix("weeklyreset-"))
+                && !validDisplayIDs.contains($0)
+        }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
     private static func cancelPendingRequests(withPrefix prefix: String) async {

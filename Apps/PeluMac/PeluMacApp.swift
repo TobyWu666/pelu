@@ -37,6 +37,50 @@ struct CodexJSONLReader {
         }
     }
 
+    /// Sum the latest `total_token_usage` from every jsonl modified within
+    /// the last `withinHours`. Each session contributes its single latest
+    /// token_count event (the session's running cumulative at that point);
+    /// the aggregate is the running cumulative across all active sessions,
+    /// which `PeluHistoryScreen` feeds into `CodexPricing.estimateUSD` and
+    /// passes through the same day-over-day delta logic as Claude's
+    /// `cost.total_cost_usd`. Returns nil when no jsonl in the window
+    /// has a usable token_count event.
+    func summedTokenUsage(withinHours: Double = 24) -> CodexTokenUsage? {
+        let cutoff = Date().addingTimeInterval(-withinHours * 3600)
+        let activeFiles = candidateJSONLFiles().filter { url in
+            guard let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            else { return false }
+            return mod >= cutoff
+        }
+
+        var total = CodexTokenUsage.zero
+        var anyContribution = false
+
+        for fileURL in activeFiles {
+            guard let match = latestTokenCountMatch(in: fileURL),
+                  let info = match.payload["info"] as? [String: Any],
+                  let totals = info["total_token_usage"] as? [String: Any]
+            else { continue }
+
+            // Codex writes these as integers, but Foundation surfaces JSON
+            // numbers as NSNumber — read via Int first, fall back to Double
+            // for safety against any future shape changes.
+            let input = (totals["input_tokens"] as? Int) ?? Int(totals["input_tokens"] as? Double ?? 0)
+            let cached = (totals["cached_input_tokens"] as? Int) ?? Int(totals["cached_input_tokens"] as? Double ?? 0)
+            let output = (totals["output_tokens"] as? Int) ?? Int(totals["output_tokens"] as? Double ?? 0)
+            let sessionUsage = CodexTokenUsage(
+                inputTokens: input,
+                cachedInputTokens: cached,
+                outputTokens: output
+            )
+            guard !sessionUsage.isEmpty else { continue }
+            total = total.adding(sessionUsage)
+            anyContribution = true
+        }
+
+        return anyContribution ? total : nil
+    }
+
     func currentSessionsDirectory(now: Date = Date()) -> URL {
         let cal = Calendar.current
         let y = cal.component(.year, from: now)
@@ -320,10 +364,18 @@ final class UsageMonitor: @unchecked Sendable {
             let activeCodexFiles = self.codexReader.recentlyActiveJSONLFiles()
             let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
 
+            // Codex RPC doesn't expose raw token counts, so we always pull
+            // them from JSONL (sum of latest `total_token_usage` across all
+            // sessions active in the last 24h). This drives the history
+            // screen's USD estimate; percentages still come from whichever
+            // source `codexMetric` was just resolved from.
+            let codexTokens = self.codexReader.summedTokenUsage()
+            let codexMetricWithTokens = codexMetric.attachingTokenUsage(codexTokens)
+
             let snap = UsageSnapshot(
                 generatedAt: Date(),
                 source: .local,
-                metrics: [claudeMetric, codexMetric]
+                metrics: [claudeMetric, codexMetricWithTokens]
             )
             DispatchQueue.main.async {
                 self.snapshot = snap

@@ -65,9 +65,10 @@ struct PeluHistoryScreen: View {
 
     private struct DailyTotal: Identifiable {
         let date: Date
-        let costUSD: Decimal
+        let claudeUSD: Decimal
+        let codexUSD: Decimal
         var id: Date { date }
-        var costDouble: Double { NSDecimalNumber(decimal: costUSD).doubleValue }
+        var totalUSD: Decimal { claudeUSD + codexUSD }
     }
 
     /// Per-day cost expressed as the *delta* from the previous recorded day,
@@ -75,6 +76,10 @@ struct PeluHistoryScreen: View {
     /// cumulative — a session that started yesterday still reports yesterday's
     /// spending in today's snapshot, so summing the raw value double-counts.
     /// Computing the day-over-day delta strips that out.
+    ///
+    /// Codex 走相同邏輯，但「累積值」是把 `tokenUsage` 丟進
+    /// `CodexPricing.estimateUSD` 算出來的等值美金 — RPC 不給 token 數，
+    /// 所以這條路徑只有 PeluMac v1.0.7+ 寫入的 snapshot 才會有 Codex 花費。
     ///
     /// 多 Mac 註記：dashboard / widget / Live Activity 走 displaySnapshot
     /// （per-provider 取最高），歷史頁刻意走完整 aggregate.macs，因為花費
@@ -93,12 +98,13 @@ struct PeluHistoryScreen: View {
         let today = Calendar.current.startOfDay(for: Date())
 
         for entry in sorted {
-            var dayTotal: Decimal = 0
-            var anyCostObserved = false
+            var claudeDay: Decimal = 0
+            var codexDay: Decimal = 0
+            var observed: Set<ProviderKind> = []
             for mac in entry.macs {
                 for metric in mac.snapshot.metrics {
-                    guard let cur = metric.costTodayUSD else { continue }
-                    anyCostObserved = true
+                    guard let cur = cumulativeUSD(for: metric) else { continue }
+                    observed.insert(metric.provider)
                     let key = "\(mac.macId)|\(metric.provider.rawValue)"
                     let prev = prevByKey[key] ?? 0
                     // Cost decreased → session reset → today's value is the
@@ -108,7 +114,10 @@ struct PeluHistoryScreen: View {
                     // catches the "today" case where we'd rather show the
                     // running cumulative than a misleading $0.
                     let delta: Decimal = cur < prev ? cur : (cur - prev)
-                    dayTotal += delta
+                    switch metric.provider {
+                    case .claudeCode: claudeDay += delta
+                    case .codex:      codexDay += delta
+                    }
                     prevByKey[key] = cur
                 }
             }
@@ -118,11 +127,23 @@ struct PeluHistoryScreen: View {
             // Fallback for today: when the delta math collapses to 0 but the
             // current snapshot still has a positive cumulative, show that.
             // Better to display the active session's running cost than to
-            // pretend today had no spend.
-            if isToday && dayTotal == 0 && anyCostObserved {
-                dayTotal = entry.macs.reduce(Decimal(0)) { acc, mac in
-                    acc + mac.snapshot.metrics.reduce(Decimal(0)) { inner, m in
-                        inner + (m.costTodayUSD ?? 0)
+            // pretend today had no spend. Applied per-provider so a fresh
+            // Codex session doesn't get shadowed by a stable Claude line.
+            if isToday {
+                if claudeDay == 0 && observed.contains(.claudeCode) {
+                    claudeDay = entry.macs.reduce(Decimal(0)) { acc, mac in
+                        acc + mac.snapshot.metrics
+                            .filter { $0.provider == .claudeCode }
+                            .reduce(Decimal(0)) { inner, m in inner + (m.costTodayUSD ?? 0) }
+                    }
+                }
+                if codexDay == 0 && observed.contains(.codex) {
+                    codexDay = entry.macs.reduce(Decimal(0)) { acc, mac in
+                        acc + mac.snapshot.metrics
+                            .filter { $0.provider == .codex }
+                            .reduce(Decimal(0)) { inner, m in
+                                inner + (m.tokenUsage.map(CodexPricing.estimateUSD(for:)) ?? 0)
+                            }
                     }
                 }
             }
@@ -130,16 +151,29 @@ struct PeluHistoryScreen: View {
             // Keep today on the chart even when it sums to 0 so the bar
             // doesn't silently disappear — users read missing bars as "Pelu
             // is broken" instead of "no spend yet".
-            if dayTotal > 0 || isToday {
-                result.append(DailyTotal(date: entry.date, costUSD: dayTotal))
+            if (claudeDay + codexDay) > 0 || isToday {
+                result.append(DailyTotal(date: entry.date, claudeUSD: claudeDay, codexUSD: codexDay))
             }
         }
         return result
     }
 
-    private var totalCost: Decimal {
-        dailyTotals.reduce(Decimal(0)) { $0 + $1.costUSD }
+    /// Unified running-cumulative USD for the delta math. Claude reads
+    /// directly from `cost.total_cost_usd`; Codex derives from
+    /// `tokenUsage` (sum across active sessions) via `CodexPricing`.
+    private func cumulativeUSD(for metric: UsageMetric) -> Decimal? {
+        switch metric.provider {
+        case .claudeCode:
+            return metric.costTodayUSD
+        case .codex:
+            guard let tokens = metric.tokenUsage else { return nil }
+            return CodexPricing.estimateUSD(for: tokens)
+        }
     }
+
+    private var totalClaude: Decimal { dailyTotals.reduce(Decimal(0)) { $0 + $1.claudeUSD } }
+    private var totalCodex: Decimal { dailyTotals.reduce(Decimal(0)) { $0 + $1.codexUSD } }
+    private var totalCost: Decimal { totalClaude + totalCodex }
 
     private var averageDaily: Decimal {
         guard !dailyTotals.isEmpty else { return 0 }
@@ -147,7 +181,7 @@ struct PeluHistoryScreen: View {
     }
 
     private var peakCost: Decimal {
-        dailyTotals.map(\.costUSD).max() ?? 0
+        dailyTotals.map(\.totalUSD).max() ?? 0
     }
 
     // MARK: - Content
@@ -165,20 +199,31 @@ struct PeluHistoryScreen: View {
     }
 
     private var heroBlock: some View {
-        VStack(spacing: 6) {
-            Text(formatCost(totalCost))
-                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
-            Text("最近 \(dailyTotals.count) 天估算")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 16) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatCost(totalCost))
+                        .font(.system(.largeTitle, design: .rounded, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                    Text("最近 \(dailyTotals.count) 天估算")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
 
-            HStack(spacing: 24) {
+                Spacer(minLength: 8)
+
+                providerBreakdown
+            }
+
+            Divider().opacity(0.4)
+
+            HStack(spacing: 0) {
                 statTile(label: "平均每天", value: formatCost(averageDaily))
                 statTile(label: "最高一天", value: formatCost(peakCost))
             }
-            .padding(.top, 14)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
@@ -187,28 +232,86 @@ struct PeluHistoryScreen: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private func statTile(label: String, value: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.headline.monospacedDigit())
-            Text(label)
+    /// 兩列右靠的分項表 — `Grid` 讓 label 欄與數值欄各自對齊，避免
+    /// "≈$0.00" 與 "$338.05" 寬度不同時左緣參差不齊。
+    private var providerBreakdown: some View {
+        Grid(horizontalSpacing: 10, verticalSpacing: 6) {
+            GridRow {
+                providerLabel("Claude", color: claudeColor)
+                Text(formatCost(totalClaude))
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                    .gridColumnAlignment(.trailing)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            GridRow {
+                providerLabel("Codex", color: codexColor)
+                Text("≈\(formatCost(totalCodex))")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                    .gridColumnAlignment(.trailing)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+    }
+
+    private func providerLabel(_ name: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(name)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
+    private func statTile(label: String, value: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Chart palette. Kept as computed properties so the chip dots, bar
+    /// segments, and legend swatches stay in lockstep.
+    private var claudeColor: Color { PeluTheme.brandTeal(for: colorScheme) }
+    private var codexColor: Color { PeluTheme.amber }
+
     private var chartBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("每日花費")
                 .font(.headline)
-            Chart(dailyTotals) { day in
-                BarMark(
-                    x: .value("日期", day.date, unit: .day),
-                    y: .value("花費", day.costDouble)
-                )
-                .foregroundStyle(PeluTheme.primaryText(for: colorScheme).opacity(0.85))
-                .cornerRadius(3)
+            Chart {
+                ForEach(dailyTotals) { day in
+                    BarMark(
+                        x: .value("日期", day.date, unit: .day),
+                        y: .value("花費", NSDecimalNumber(decimal: day.claudeUSD).doubleValue)
+                    )
+                    .foregroundStyle(by: .value("provider", "Claude"))
+                    .cornerRadius(3)
+
+                    BarMark(
+                        x: .value("日期", day.date, unit: .day),
+                        y: .value("花費", NSDecimalNumber(decimal: day.codexUSD).doubleValue)
+                    )
+                    .foregroundStyle(by: .value("provider", "Codex"))
+                    .cornerRadius(3)
+                }
             }
+            .chartForegroundStyleScale([
+                "Claude": claudeColor,
+                "Codex": codexColor,
+            ])
+            .chartLegend(.hidden)  // chips above cover the same info
             .frame(height: 200)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: chartStride)) { value in
@@ -244,11 +347,14 @@ struct PeluHistoryScreen: View {
     }
 
     private var footerNote: some View {
-        Text("數字依 API 定價推算「運算等值花費」。Pro / Max / Team 訂閱用戶的月費是固定的，這裡只是讓你看見自己實際消耗的運算量。")
-            .font(.caption)
-            .foregroundStyle(.tertiary)
-            .multilineTextAlignment(.leading)
-            .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Claude 讀官方 `cost.total_cost_usd`；Codex 以 gpt-5-codex API 定價估算（input $1.25/M、cached $0.125/M、output $10/M，含 reasoning）。")
+            Text("Plus / Pro / Team 訂閱月費固定，數字僅反映實際消耗的運算量。")
+        }
+        .font(.caption)
+        .foregroundStyle(.tertiary)
+        .multilineTextAlignment(.leading)
+        .padding(.horizontal, 4)
     }
 
     private var emptyState: some View {
@@ -258,7 +364,7 @@ struct PeluHistoryScreen: View {
                 .foregroundStyle(.secondary)
             Text("還沒有花費紀錄")
                 .font(.title3.weight(.semibold))
-            Text("每天的 AI 花費會在這支 iPhone 同步資料時自動記錄。先在 Mac 跑一陣子 Claude Code，明天回來看你花了多少。")
+            Text("每天的 AI 花費會在這支 iPhone 同步資料時自動記錄。先在 Mac 跑一陣子 Claude Code 或 Codex，明天回來看你花了多少。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -269,13 +375,17 @@ struct PeluHistoryScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// 統一的金額格式 — 用 "$" 而非 locale-dependent 的 "US$"，與 hero / chart
+    /// 軸的 "$N" 風格一致。`numberStyle = .currency` 在 zh-TW 會給 "US$"，
+    /// hero chip 會被擠到斷行，所以這裡用 decimal style 手動補前綴。
     private func formatCost(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
         formatter.maximumFractionDigits = 2
         formatter.minimumFractionDigits = 2
-        return formatter.string(from: value as NSDecimalNumber) ?? "$\(value)"
+        let body = formatter.string(from: value as NSDecimalNumber) ?? String(describing: value)
+        return "$\(body)"
     }
 }
 

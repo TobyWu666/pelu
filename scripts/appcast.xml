@@ -14,6 +14,31 @@
     -->
 
     <item>
+      <title>Pelu 1.0.7</title>
+      <pubDate>Thu, 28 May 2026 14:41:40 +0000</pubDate>
+      <sparkle:version>8</sparkle:version>
+      <sparkle:shortVersionString>1.0.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>新增</h3>
+        <ul>
+          <li>Codex 花費估算：Mac 端加總當日所有 Codex active session 的 token 使用量（input / cached / output）寫進 CloudKit；搭配 iPhone v1.0.7+ 在歷史頁以 gpt-5-codex API 定價推算等值美金，與 Claude 一起加總顯示</li>
+        </ul>
+        <h3>說明</h3>
+        <ul>
+          <li>此次發版 PeluMac 變動限於資料寫入；menu bar / dashboard / 同步 / 推播行為都不受影響</li>
+          <li>Codex Plus / Pro 訂閱用戶月費固定，數字僅作 API 等值參考</li>
+          <li>升級後須等下一次 Mac 上傳新 snapshot 才會看到 Codex 數字；之前 v1.0.6 寫的歷史 entry 沒有 token 欄位，仍顯示 $0.00</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.7/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="KoccHbd0IH6TbjFou1WUF9utZAV0ELItrvYoZBv9mBdTCqazRx4hCTKVRebJJtgxOZlPe8YSnGziqWoCdtxqCg=="
+        length="2247723" />
+    </item>
+
+    <item>
       <title>Pelu 1.0.6</title>
       <pubDate>Sun, 24 May 2026 15:20:44 +0000</pubDate>
       <sparkle:version>7</sparkle:version>
