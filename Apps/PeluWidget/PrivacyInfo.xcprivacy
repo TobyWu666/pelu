@@ -13,6 +13,15 @@
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
+			<!-- App Group UserDefaults shared with the main app. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<dict>
 			<!-- Reading the aggregate cache file from App Group container. -->
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
