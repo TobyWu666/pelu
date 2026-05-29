@@ -14,6 +14,44 @@
     -->
 
     <item>
+      <title>Pelu 1.0.9</title>
+      <pubDate>Fri, 29 May 2026 03:52:57 +0000</pubDate>
+      <sparkle:version>10</sparkle:version>
+      <sparkle:shortVersionString>1.0.9</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>新增</h3>
+        <ul>
+          <li>設定頁最上方加入「連動你的手機」連結,可一鍵前往下載 iPhone 版 Pelu</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.9/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="DBaOhpg3Dx+qIpiRZD+xvH8lTRaE5B7+3DXQdhqP0WoMFVMpjTvrRWMmOe6u3HT2QVIrhC6E+SENT6LcOKBVCQ=="
+        length="2255883" />
+    </item>
+
+    <item>
+      <title>Pelu 1.0.8</title>
+      <pubDate>Thu, 28 May 2026 17:04:32 +0000</pubDate>
+      <sparkle:version>9</sparkle:version>
+      <sparkle:shortVersionString>1.0.8</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>修正</h3>
+        <ul>
+          <li>CloudKit 環境鎖定 Production，修正與 iPhone App Store / TestFlight 版本同步不到的問題</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.8/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="aQ4rcrX99mjGF2p242pBFMx9pkVW+NwZOAdwZEGyxk+Yy+patr9B1bCHnFFKzUVnVR3IX36tpL/J+/IgpOb6Ag=="
+        length="2247789" />
+    </item>
+
+    <item>
       <title>Pelu 1.0.7</title>
       <pubDate>Thu, 28 May 2026 14:41:40 +0000</pubDate>
       <sparkle:version>8</sparkle:version>
