@@ -4,9 +4,9 @@
 
 **全部透過使用者自己的 iCloud Private Database 同步**——沒有 Pelu 後端、沒有帳號註冊、沒有配對流程。Mac 和 iPhone 登入同一個 iCloud 帳號就會自動同步。
 
-> 官方網站：<https://pelu.wutoby.com>
-> iPhone App：App Store「Pelu」
-> Mac App：<https://github.com/TobyWu666/pelu-releases/releases/latest>
+> 官方網站：<https://pelu.wutoby.com> /
+> iPhone App：App Store「Pelu」/
+> Mac App：<https://github.com/TobyWu666/pelu-releases/releases/latest> /
 
 ---
 
