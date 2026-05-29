@@ -23,9 +23,11 @@ struct PeluMacSettingsView: View {
     private static let privacyPolicyURL: URL? = URL(string: "https://pelu.wutoby.com/privacy.html")
     private static let supportCenterURL: URL? = URL(string: "https://pelu.wutoby.com/support.html")
     private static let tutorialCenterURL: URL? = URL(string: "https://pelu.wutoby.com/tutorial.html")
+    private static let phonePromoURL: URL? = URL(string: "https://pelu.wutoby.com/index.html#top")
 
     var body: some View {
         Form {
+            phonePromoSection
             brandSection
             menuBarSection
             launchSection
@@ -48,6 +50,43 @@ struct PeluMacSettingsView: View {
             Text("這個頁面還沒上線，敬請期待。")
         }
         .navigationTitle("Pelu 設定")
+    }
+
+    // MARK: - Phone promo
+
+    private var phonePromoSection: some View {
+        Section {
+            Button {
+                if let url = Self.phonePromoURL {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 26, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(PeluTheme.brandTeal(for: colorScheme))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("連動你的手機")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text("下載 iPhone 版 Pelu，把配額帶在身上")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Brand
