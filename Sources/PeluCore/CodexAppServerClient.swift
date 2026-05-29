@@ -277,7 +277,17 @@ public actor CodexAppServerClient {
     }
 
     private func handleStdoutEOF() {
-        let exitCode = process?.terminationStatus
+        // The child closed stdout, but Foundation considers the task "still
+        // running" until it has fully reaped — reading terminationStatus in
+        // that window throws NSInvalidArgumentException which surfaces as
+        // SIGABRT. Skip the exit code if the task hasn't actually exited yet;
+        // callers already handle a nil code.
+        let exitCode: Int32?
+        if let proc = process, !proc.isRunning {
+            exitCode = proc.terminationStatus
+        } else {
+            exitCode = nil
+        }
         for id in Array(pending.keys) {
             resolvePending(id: id, with: .failure(ClientError.processExited(code: exitCode)))
         }
