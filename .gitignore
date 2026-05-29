@@ -3,6 +3,8 @@
 DerivedData/
 build-release/
 build-release-ios/
+build-review-derived/
+build-sim/
 build/
 dist/
 *.xcuserstate
