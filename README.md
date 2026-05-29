@@ -127,6 +127,8 @@ Pelu/
 | App Group | `group.org.tobywu.pelu` |
 | CloudKit Container | `iCloud.org.tobywu.pelu` |
 
+> Fork 此專案時,需要把以上所有 ID 換成你自己 Apple Developer Team 下的 ID,並到 CloudKit Console 建立對應 container,否則 build 與 CloudKit 同步都無法運作。
+
 ---
 
 ## 開發者區
