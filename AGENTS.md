@@ -75,9 +75,9 @@ Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 
 ## 6. 發版
 
-**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29），下一版 build ≥ 12；iOS `1.0`（build 2，READY_FOR_SALE），下一版 build ≥ 3（`1.1` build 3 已 archive，待上傳送審）。iOS 走 Xcode Archive → App Store Connect。
+**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29），下一版 build ≥ 12；iOS `1.0`（build 2，READY_FOR_SALE），下一版 build ≥ 4（`1.1` build 3 已上傳 2026-10-08，待送審）。iOS 走 Xcode Archive → App Store Connect。
 
-iOS 版號用命令列帶入（`MARKETING_VERSION=… CURRENT_PROJECT_VERSION=…`），pbxproj 不動。agent 可以用下面的 API key 加 `-allowProvisioningUpdates` 跑 `xcodebuild archive`，但 **`-exportArchive` 上傳會失敗**：這把 key 沒有 cloud-managed distribution certificate 權限，本機 Keychain 也沒有 Apple Distribution 憑證。做法是把 `.xcarchive` 放進 `~/Library/Developer/Xcode/Archives/<日期>/`，由使用者在 Organizer 按 Distribute App。
+iOS 版號用命令列帶入（`MARKETING_VERSION=… CURRENT_PROJECT_VERSION=…`），pbxproj 不動。`xcodebuild archive` / `-exportArchive`（ExportOptions `method=app-store-connect`、`destination=upload`）都加 `-allowProvisioningUpdates`，但**不要帶 `-authenticationKey*`**：那把 API key 沒有 cloud-managed distribution certificate 權限，會匯出失敗；不帶就改用 Xcode 裡登入的帳號雲端簽章，可以直接上傳。build、archive 路徑放在 iCloud 外。
 
 App Store Connect 狀態（唯讀：app、版本、最近 build）：
 
