@@ -75,7 +75,7 @@ Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 
 ## 6. 發版
 
-**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29），下一版 build ≥ 12；iOS `1.0`（build 2，READY_FOR_SALE），下一版 build ≥ 4（`1.1` build 3 已上傳 2026-10-08，待送審）。iOS 走 Xcode Archive → App Store Connect。
+**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29），下一版 build ≥ 12；iOS `1.0`（build 2，READY_FOR_SALE），下一版 build ≥ 4（`1.1` build 3 於 2026-10-08 送審，WAITING_FOR_REVIEW，核准後自動上架）。iOS 走 Xcode Archive → App Store Connect。
 
 iOS 版號用命令列帶入（`MARKETING_VERSION=… CURRENT_PROJECT_VERSION=…`），pbxproj 不動。`xcodebuild archive` / `-exportArchive`（ExportOptions `method=app-store-connect`、`destination=upload`）都加 `-allowProvisioningUpdates`，但**不要帶 `-authenticationKey*`**：那把 API key 沒有 cloud-managed distribution certificate 權限，會匯出失敗；不帶就改用 Xcode 裡登入的帳號雲端簽章，可以直接上傳。build、archive 路徑放在 iCloud 外。
 
