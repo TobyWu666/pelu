@@ -48,7 +48,8 @@ repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesi
 
 ## 4. 資料流與關鍵規則
 
-- **Claude Code**：PeluMac 安裝 statusLine hook（`~/.claude/usag-statusline.py`，寫入 `~/.claude/settings.json`），hook 輸出 `~/.claude/usag-status.json`（檔名就是 `usag`，不是錯字）→ `ClaudeCodeParser`。
+- **Claude Code**：主來源 `GET https://api.anthropic.com/api/oauth/usage`（`ClaudeUsageAPIClient` / `ClaudeUsageAPIParser`，Claude Code `/usage` 用的非公開端點），token 讀 Keychain `Claude Code-credentials`，涵蓋終端機、IDE、桌面版、claude.ai 的用量。**不要自己 refresh token**（refresh token 會輪替，可能把 Claude Code 登出）；過期就等 Claude Code 下次執行。端點限流很兇（30–60 秒輪詢會卡 429 數小時，連 Claude Code 的 `/usage` 一起壞），所以 `~/.claude/projects/*/*.jsonl` 有新活動才 5 分鐘一次、沒有則 15 分鐘一次（本地 2–8 點兩者 ×2），失敗退避 5→15→30→60 分鐘；不要調快，也不要偽裝成 claude-code 的 User-Agent。此做法在 Anthropic 條款上屬灰色地帶（文件禁止第三方蒐集／中介 Claude.ai token），改動前先問使用者。資料過期門檻統一用 `UsageMetric.staleAfter`。備援是 statusLine hook（`~/.claude/usag-statusline.py`，寫入 `~/.claude/settings.json`），輸出 `~/.claude/usag-status.json`（檔名就是 `usag`，不是錯字）→ `ClaudeCodeParser`；hook 只在終端機 session 執行，IDE 擴充套件不會觸發。兩者取 `measuredAt` 較新者，context / cost 只有 hook 有。
+- **ChatGPT.app**（原 Codex.app，bundle id 仍是 `com.openai.codex`）的 codex 在 `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。
 - **Codex**：主來源 `codex app-server` JSON-RPC `account/rateLimits/read`（`CodexAppServerClient` / `CodexQuotaProvider`，`dataSource = officialQuota`）；備援掃 `~/.codex/sessions/**/*.jsonl`（`localEstimate`）。binary 依序找 ChatGPT.app / Codex.app 內附、NSWorkspace、常見 CLI 路徑。
 - **配額視窗長度由 provider 決定**，不要寫死 5h / 7d。`UsageMetric.usedPercent` / `weeklyPercent` 是歷史命名，語意是 primary / secondary window。
 - **CloudKit**：record type `MacSnapshot`，record name `mac-{macId}`，container 一律用 `MacSnapshotRecord.containerIdentifier`（**不要用 `CKContainer.default()`**）。上傳要序列化／合併，避免 `Server Record Changed` 衝突。PeluMac 固定走 Production 環境；iOS Debug 走 Development。

@@ -64,7 +64,7 @@ public actor CodexAppServerClient {
     // MARK: - Binary discovery
 
     /// Locate the `codex` binary. Preference order:
-    ///  1. ChatGPT/Codex desktop app's bundled binary
+    ///  1. ChatGPT/Codex desktop app's bundled binary (see `bundledBinary(in:)`)
     ///  2. Per-user ChatGPT/Codex desktop app install
     ///  3. NSWorkspace lookup by bundle id (handles non-standard install dirs)
     ///  4. Common CLI paths (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.volta/bin`)
@@ -75,20 +75,20 @@ public actor CodexAppServerClient {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
 
-        let appPaths = [
-            URL(fileURLWithPath: "/Applications/ChatGPT.app/Contents/Resources/codex"),
-            URL(fileURLWithPath: "/Applications/Codex.app/Contents/Resources/codex"),
-            home.appendingPathComponent("Applications/ChatGPT.app/Contents/Resources/codex"),
-            home.appendingPathComponent("Applications/Codex.app/Contents/Resources/codex"),
+        let appBundles = [
+            URL(fileURLWithPath: "/Applications/ChatGPT.app"),
+            URL(fileURLWithPath: "/Applications/Codex.app"),
+            home.appendingPathComponent("Applications/ChatGPT.app"),
+            home.appendingPathComponent("Applications/Codex.app"),
         ]
-        for url in appPaths where fm.isExecutableFile(atPath: url.path) {
-            return url
+        for app in appBundles {
+            if let url = bundledBinary(in: app, fileManager: fm) { return url }
         }
 
         #if canImport(AppKit)
-        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.codex") {
-            let candidate = appURL.appendingPathComponent("Contents/Resources/codex")
-            if fm.isExecutableFile(atPath: candidate.path) { return candidate }
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.codex"),
+           let url = bundledBinary(in: appURL, fileManager: fm) {
+            return url
         }
         #endif
 
@@ -100,6 +100,23 @@ public actor CodexAppServerClient {
         ]
         for url in cliPaths where fm.isExecutableFile(atPath: url.path) {
             return url
+        }
+        return nil
+    }
+
+    /// ChatGPT.app (formerly Codex.app, same `com.openai.codex` bundle id)
+    /// ships the CLI as a nested `CodexCLI.app`; older Codex.app builds put
+    /// it directly in Resources. Prefer the real Mach-O over the
+    /// `codex-cli/bin/codex` shell wrapper.
+    static func bundledBinary(in app: URL, fileManager fm: FileManager = .default) -> URL? {
+        let candidates = [
+            "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+            "Contents/Resources/codex-cli/bin/codex",
+            "Contents/Resources/codex",
+        ]
+        for path in candidates {
+            let url = app.appendingPathComponent(path)
+            if fm.isExecutableFile(atPath: url.path) { return url }
         }
         return nil
     }

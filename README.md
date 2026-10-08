@@ -90,6 +90,7 @@ Codex RPC 會優先使用 ChatGPT／Codex 桌面 app 內附的 binary(`/Applicat
 - **不收集任何使用者資料**,符合 Apple App Store「Data Not Collected」標準
 - **資料只存在使用者自己的 iCloud Private Database**,Pelu 開發者沒有任何技術手段可以存取
 - 沒有 Pelu 後端伺服器、沒有第三方分析、沒有廣告 SDK
+- PeluMac 會讀取 Claude Code 存在 Keychain 的登入 token，只用來向 Anthropic 查詢你自己的用量（首次會跳出 macOS 授權視窗）；token 只會送往 Anthropic，不會儲存或送到其他地方
 - 詳細隱私政策:<https://pelu.wutoby.com/privacy.html>
 
 ---

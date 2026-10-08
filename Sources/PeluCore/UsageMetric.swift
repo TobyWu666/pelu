@@ -53,6 +53,11 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
 
     public var id: ProviderKind { provider }
 
+    /// A measurement older than this is treated as stale. Longer than the
+    /// slowest idle poll (Codex RPC 20 min, Claude usage API 30 min overnight)
+    /// so a quiet, healthy source doesn't look disconnected.
+    public static let staleAfter: TimeInterval = 2100
+
     public init(
         provider: ProviderKind,
         usedPercent: Double?,

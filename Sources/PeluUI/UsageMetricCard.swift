@@ -284,11 +284,11 @@ struct UsageMetricCard: View {
     }
 
     /// True when the measurement is old enough that the user should question
-    /// whether it reflects current reality (≥ 5 min). Drives both the "估算"
+    /// whether it reflects current reality. Drives both the "估算"
     /// badge and the "更新於" text — fresh data shows neither.
     private func isStale(measuredAt: Date?, now: Date) -> Bool {
         guard let measuredAt else { return false }
-        return now.timeIntervalSince(measuredAt) >= 300
+        return now.timeIntervalSince(measuredAt) >= UsageMetric.staleAfter
     }
 
     @ViewBuilder

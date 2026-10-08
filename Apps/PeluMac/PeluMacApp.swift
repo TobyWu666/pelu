@@ -267,6 +267,10 @@ final class UsageMonitor: @unchecked Sendable {
 
     private let claudeFilePath: URL
     private let claudeParser = ClaudeCodeParser()
+    /// Primary Claude source; the statusLine hook only fires in terminal sessions.
+    private let claudeUsageClient = ClaudeUsageAPIClient(
+        clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    )
     private let codexReader = CodexJSONLReader()
     /// Serial queue for refresh work. The previous `.global(qos: .utility)`
     /// was concurrent — when init's first refresh raced with the provider's
@@ -321,6 +325,9 @@ final class UsageMonitor: @unchecked Sendable {
             self?.refresh()
         }
         codexQuotaProvider.start()
+        claudeUsageClient.onUpdate = { [weak self] in
+            self?.refresh()
+        }
 
         refresh()
         startWatching()
@@ -347,18 +354,20 @@ final class UsageMonitor: @unchecked Sendable {
         refreshQueue.async { [weak self] in
             guard let self else { return }
 
-            let claudeMetric: UsageMetric
-            if let measuredAt = try? self.claudeFilePath.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-               let data = try? Data(contentsOf: self.claudeFilePath),
-               let parsed = try? self.claudeParser.parse(data: data, generatedAt: measuredAt) {
-                claudeMetric = parsed
+            self.claudeUsageClient.refreshIfDue()
+            let hookMetric: UsageMetric
+            let claudeModifiedAt = try? self.claudeFilePath.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            if let data = try? Data(contentsOf: self.claudeFilePath),
+               let parsed = try? self.claudeParser.parse(data: data, fileModifiedAt: claudeModifiedAt) {
+                hookMetric = parsed
             } else {
-                claudeMetric = UsageMetric(
+                hookMetric = UsageMetric(
                     provider: .claudeCode,
                     usedPercent: nil,
                     note: "Claude status JSON 尚未可讀"
                 )
             }
+            let claudeMetric = ClaudeUsageAPIParser.merge(api: self.claudeUsageClient.latestMetric(), hook: hookMetric)
 
             // Prefer app-server quota while it is fresh. If RPC has been
             // stale for five minutes and JSONL has a newer observation, use

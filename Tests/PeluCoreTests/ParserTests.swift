@@ -69,6 +69,30 @@ import Testing
     #expect(metric.weeklyPercent == 40)     // weekly window still active
 }
 
+@Test func claudeCodeParserReportsHookTimeForStaleFile() throws {
+    // Written two days ago by the hook; no terminal session has run since.
+    let payload = """
+    {
+      "rate_limits": {
+        "five_hour": { "used_percentage": 5, "resets_at": 1791281400 },
+        "seven_day": { "used_percentage": 7, "resets_at": 1791565200 }
+      },
+      "_received_at_ts": 1791279254.88
+    }
+    """.data(using: .utf8)!
+
+    let now = Date(timeIntervalSince1970: 1791449763)
+    let metric = try ClaudeCodeParser().parse(
+        data: payload,
+        generatedAt: now,
+        fileModifiedAt: now.addingTimeInterval(-60)
+    )
+
+    #expect(metric.usedPercent == 0)
+    #expect(metric.weeklyPercent == 7)
+    #expect(metric.measuredAt == Date(timeIntervalSince1970: 1791279254.88))
+}
+
 @Test func claudeCodeParserFallsBackToLooseSchema() throws {
     let payload = """
     {

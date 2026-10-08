@@ -38,7 +38,7 @@ public struct MacUsageSample: Codable, Equatable, Sendable {
 public struct MacUsageHistory: Codable, Equatable, Sendable {
     public static let retention: TimeInterval = 30 * 86400
     /// Readings older than this are stale, and a longer gap breaks the chart line.
-    public static let gapThreshold: TimeInterval = 300
+    public static let gapThreshold: TimeInterval = UsageMetric.staleAfter
     /// Minimum spacing between samples whose values changed.
     static let changedSpacing: TimeInterval = 60
     /// Spacing for unchanged values; below `gapThreshold` so flat runs stay connected.

@@ -4,7 +4,9 @@ public struct ClaudeCodeParser: Sendable {
     public init() {}
 
     /// Parses `~/.claude/usag-status.json` written by Claude Code's statusLine hook.
-    public func parse(data: Data, generatedAt: Date = Date()) throws -> UsageMetric {
+    /// `generatedAt` is "now" for reset checks; `fileModifiedAt` is only a
+    /// fallback when the hook didn't stamp `_received_at_ts`.
+    public func parse(data: Data, generatedAt: Date = Date(), fileModifiedAt: Date? = nil) throws -> UsageMetric {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ParserError.unreadableJSON
         }
@@ -27,6 +29,7 @@ public struct ClaudeCodeParser: Sendable {
         }
         let contextWindowPercent = contextWindowObj?["used_percentage"] as? Double
         let cost: Decimal? = (costObj?["total_cost_usd"] as? Double).map { Decimal($0) }
+        let receivedAt: Date? = (object["_received_at_ts"] as? Double).map { Date(timeIntervalSince1970: $0) }
 
         // Fallback: loose key scan for older or unknown schema variants.
         // Try the rate_limits.five_hour subtree first (handles type drift like String "2.5%"
@@ -79,10 +82,10 @@ public struct ClaudeCodeParser: Sendable {
             // Claude Code's statusLine hook writes the live rate_limits the
             // server just returned, so it's as authoritative as Codex's RPC.
             dataSource: .officialQuota,
-            // Approximate measuredAt with file read time. The hook writes
-            // atomically on every Claude interaction, so file mtime ≈
-            // last-real-activity time, which is what we want to report.
-            measuredAt: generatedAt
+            // The hook only runs while a terminal Claude Code session renders
+            // its status line (not in the IDE extensions), so the file can be
+            // days old. Report when the hook actually saw these numbers.
+            measuredAt: receivedAt ?? fileModifiedAt ?? generatedAt
         )
     }
 }

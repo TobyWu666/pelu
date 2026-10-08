@@ -191,7 +191,7 @@ private struct MacQuotaCard: View {
                 .foregroundStyle(.secondary)
             }
 
-            if let measuredAt = metric.measuredAt, now.timeIntervalSince(measuredAt) >= 300 {
+            if let measuredAt = metric.measuredAt, now.timeIntervalSince(measuredAt) >= UsageMetric.staleAfter {
                 Label("資料更新於 \(UpdatedAtFormatter.string(from: measuredAt))", systemImage: "clock.badge.exclamationmark")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
