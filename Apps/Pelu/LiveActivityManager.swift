@@ -15,18 +15,34 @@ final class LiveActivityManager {
         )
 
         // Reuse any existing active activity to avoid stacking
-        if let existing = Activity<PeluActivityAttributes>.activities.first(where: {
-            $0.activityState == .active || $0.activityState == .stale
-        }) {
-            Task { await existing.update(content) }
+        if Self.currentActivity() != nil {
+            Task { await Self.updateCurrent(content) }
         } else {
             start(with: state)
         }
     }
 
     func end() {
+        Task { await Self.endAll() }
+    }
+
+    // `Activity` isn't Sendable, so look it up inside the nonisolated async call
+    // instead of capturing it on the main actor and sending it across.
+    private nonisolated static func currentActivity() -> Activity<PeluActivityAttributes>? {
+        Activity<PeluActivityAttributes>.activities.first {
+            $0.activityState == .active || $0.activityState == .stale
+        }
+    }
+
+    private nonisolated static func updateCurrent(
+        _ content: ActivityContent<PeluActivityAttributes.ContentState>
+    ) async {
+        await currentActivity()?.update(content)
+    }
+
+    private nonisolated static func endAll() async {
         for activity in Activity<PeluActivityAttributes>.activities {
-            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            await activity.end(nil, dismissalPolicy: .immediate)
         }
     }
 

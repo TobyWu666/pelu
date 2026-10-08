@@ -21,8 +21,14 @@ public struct AppGroupStore {
             return nil
         }
 
+        self.init(containerURL: containerURL, defaults: userDefaults)
+    }
+
+    /// Lets tests point at a temp directory; un-entitled processes can't write
+    /// to `~/Library/Group Containers` on recent macOS.
+    init(containerURL: URL?, defaults: UserDefaults?) {
         self.aggregateURL = containerURL?.appendingPathComponent("latest-aggregate-snapshot.json")
-        self.defaults = userDefaults
+        self.defaults = defaults
     }
 
     public func save(_ aggregate: AggregateSnapshot) throws {
