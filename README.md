@@ -13,12 +13,12 @@
 ## 功能
 
 ### iPhone App
-- **Dashboard**：Claude Code 與 Codex 的 5 小時 / 7 日配額、reset 倒數
-- **多 Mac 聚合**：同一個 iCloud 帳號裝多台 Mac 時，自動取用量最高的那台顯示
+- **Dashboard**：Claude Code 與 Codex 的即時配額視窗、reset 倒數（依 provider 回傳的週期顯示）
+- **多 Mac 聚合**：同一個 iCloud 帳號裝多台 Mac 時，自動聚合顯示(Claude 取用量最高的那台,Codex 取最新一筆帳號層級量測)
 - **歷史紀錄**：30 天用量紀錄與花費估算（gpt-5-codex API 等值計算）
 - **桌面 Widget**：small / medium 兩種尺寸
 - **Live Activity**：鎖屏與動態島即時顯示配額與 reset 倒數
-- **通知**：5 小時與每週 reset 提醒、低額度警告
+- **通知**：短期與每週 reset 提醒、低額度警告
 - **斷線提示**：超過 5 分鐘沒收到新資料會在 header 顯示「斷線」狀態
 
 ### PeluMac
@@ -69,11 +69,7 @@
 | Claude Code | Pelu 安裝的 statusLine hook 寫進 `~/.claude/usag-status.json` | — |
 | Codex | `codex app-server` JSON-RPC `account/rateLimits/read`（官方 quota） | `~/.codex/sessions/*.jsonl` 推算 |
 
-Codex RPC 可使用 Codex 桌面 app 內附的 binary,不需要使用者另外裝 CLI:
-
-```
-/Applications/Codex.app/Contents/Resources/codex
-```
+Codex RPC 會優先使用 ChatGPT／Codex 桌面 app 內附的 binary(`/Applications/ChatGPT.app` 或 `/Applications/Codex.app` 的 `Contents/Resources/codex`),不需要使用者另外裝 CLI。
 
 ### 認證
 
@@ -113,6 +109,8 @@ Pelu/
 │  └─ PeluMacPrototype/     SwiftPM prototype
 ├─ Tests/PeluCoreTests/     單元測試
 ├─ scripts/                 release.sh、Sparkle 工具、appcast 範本
+├─ assets/                  原始 logo / icon 素材
+├─ AGENTS.md                開發與協作守則(架構、契約、發版流程)
 ├─ Pelu.xcodeproj
 └─ Package.swift
 ```
@@ -153,34 +151,9 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   -destination 'generic/platform=macOS' build
 ```
 
-### Mac 正式發版
+### 發版、架構與開發守則
 
-`scripts/release.sh` 一條龍處理 build、Developer ID 簽章、Notarization、staple、DMG 製作、Sparkle Ed25519 簽章與 appcast `<item>` 輸出:
-
-```sh
-./scripts/release.sh <marketing-version> <build-number>
-# 例:./scripts/release.sh 1.0.9 10
-```
-
-需要的環境:
-
-- Developer ID Application 憑證在 Keychain
-- Developer ID Provisioning Profile 已安裝
-- `xcrun notarytool store-credentials pelu-notary` 已執行
-- `./scripts/generate-sparkle-keys.sh` 已執行(私鑰存在 Keychain)
-- `brew install create-dmg`
-
-### Sparkle 自動更新
-
-- Feed URL:`https://pelu.wutoby.com/appcast.xml`
-- 公鑰:寫死在 `Apps/PeluMac/Info.plist` 的 `SUPublicEDKey`
-- 私鑰:存在 macOS Keychain(item: `https://sparkle-project.org`)
-- 每次發版的 `CFBundleVersion`(build number)必須遞增,Sparkle 以此判斷新版
-
-### CloudKit 環境
-
-- iOS App:Debug build 走 Development,TestFlight / App Store 走 Production
-- PeluMac:entitlement `com.apple.developer.icloud-container-environment = Production` 寫死,所有 build 都用 Production
+Mac 發版流程(`scripts/release.sh`、Sparkle、Notarization)、不可變更的契約、CloudKit 環境與資料流細節都在 [AGENTS.md](./AGENTS.md)。
 
 ---
 
