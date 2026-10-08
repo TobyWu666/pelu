@@ -73,7 +73,17 @@ Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 
 ## 6. 發版
 
-**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29）。下一版 build ≥ 12。iOS 走 Xcode Archive → App Store Connect。
+**目前線上**：PeluMac `1.0.10`（build 11，2026-05-29），下一版 build ≥ 12；iOS `1.0`（build 2，READY_FOR_SALE）。iOS 走 Xcode Archive → App Store Connect。
+
+App Store Connect 狀態（唯讀：app、版本、最近 build）：
+
+```sh
+python3 scripts/appstore-status.py   # 需要 python3 -m pip install cryptography
+```
+
+- 設定在 repo 根目錄 `.appstoreconnect.local.json`（`key_id`、`issuer_id`、`bundle_id`、`private_key_path`），私鑰在 `.secrets/AuthKey_*.p8`。兩者已被 gitignore，靠 iCloud Drive 在各台 Mac 間同步；新 Mac 要等 iCloud 下載完檔案。
+- `private_key_path` 相對於設定檔所在目錄，不依賴特定使用者帳號路徑。
+- agent 可以直接執行腳本，但**絕對不要印出、複製或提交私鑰與設定檔內容**。腳本目前只讀取，要加寫入 API（上傳 metadata、送審等）前先問使用者。
 
 PeluMac：
 

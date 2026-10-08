@@ -153,7 +153,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 
 ### 發版、架構與開發守則
 
-Mac 發版流程(`scripts/release.sh`、Sparkle、Notarization)、不可變更的契約、CloudKit 環境與資料流細節都在 [AGENTS.md](./AGENTS.md)。
+Mac 發版流程(`scripts/release.sh`、Sparkle、Notarization)、App Store Connect 狀態查詢、不可變更的契約、CloudKit 環境與資料流細節都在 [AGENTS.md](./AGENTS.md)。
 
 ---
 

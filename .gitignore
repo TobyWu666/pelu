@@ -10,3 +10,7 @@ dist/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+.appstoreconnect.local.json
+.secrets/
+*.p8
+.vscode/
