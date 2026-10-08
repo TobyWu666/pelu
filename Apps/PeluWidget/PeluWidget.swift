@@ -176,7 +176,7 @@ private struct SmallWidgetView: View {
 // MARK: - Medium widget
 
 /// 中 widget：兩欄獨立卡片（左 Claude / 右 Codex），各卡有大百分比、條、
-/// 5h 重置倒數、週用量（小字 + 細條）。卡片用 thinMaterial + status tint
+/// 主要視窗重置倒數、次要視窗用量（小字 + 細條）。卡片用 thinMaterial + status tint
 /// 邊框做視覺區隔，不靠 divider。
 private struct MediumWidgetView: View {
     let snapshot: UsageSnapshot
@@ -269,11 +269,11 @@ private struct MediumProviderCard: View {
         )
     }
 
-    /// 週用量小列：左字 + 細條 + 右百分比。比主條更扁、tint 淡化，視覺
-    /// 從屬於主要的 5h 用量。
+    /// 次要視窗用量小列：左字 + 細條 + 右百分比。比主條更扁、tint 淡化，視覺
+    /// 從屬於主要視窗用量。
     private func weeklyRow(weekly: Double) -> some View {
         HStack(spacing: 6) {
-            Text("週")
+            Text(UsageMetric.windowLabel(durationMins: metric.resolvedSecondaryWindowDurationMins, compact: true))
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.tertiary)
             UsageBar(percent: weekly, tint: metric.status.tintColor.opacity(0.55), height: 3)

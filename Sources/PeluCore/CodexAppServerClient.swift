@@ -64,8 +64,8 @@ public actor CodexAppServerClient {
     // MARK: - Binary discovery
 
     /// Locate the `codex` binary. Preference order:
-    ///  1. `/Applications/Codex.app/Contents/Resources/codex` (desktop app, bundled)
-    ///  2. `~/Applications/Codex.app/Contents/Resources/codex` (per-user install)
+    ///  1. ChatGPT/Codex desktop app's bundled binary
+    ///  2. Per-user ChatGPT/Codex desktop app install
     ///  3. NSWorkspace lookup by bundle id (handles non-standard install dirs)
     ///  4. Common CLI paths (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.volta/bin`)
     ///
@@ -76,7 +76,9 @@ public actor CodexAppServerClient {
         let home = fm.homeDirectoryForCurrentUser
 
         let appPaths = [
+            URL(fileURLWithPath: "/Applications/ChatGPT.app/Contents/Resources/codex"),
             URL(fileURLWithPath: "/Applications/Codex.app/Contents/Resources/codex"),
+            home.appendingPathComponent("Applications/ChatGPT.app/Contents/Resources/codex"),
             home.appendingPathComponent("Applications/Codex.app/Contents/Resources/codex"),
         ]
         for url in appPaths where fm.isExecutableFile(atPath: url.path) {

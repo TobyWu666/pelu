@@ -115,7 +115,7 @@ enum UsageSurfaceUpdater {
             }
         }
 
-        // Low-quota: fire when 5h usage% crosses 90 (data-driven).
+        // Low-quota: fire when the primary-window usage crosses 90%.
         // Pass an empty aggregate when there's no prior data so the notifier
         // still has a chance to alert on a first-launch already-above-90 case.
         await LocalUsageNotifier.notifyLowQuotaCrossings(
@@ -136,7 +136,7 @@ enum UsageSurfaceUpdater {
 enum LocalUsageNotifier {
     private static let lowQuotaThreshold: Double = 90
 
-    /// Fire when the dashboard's displayed 5h `usedPercent` enters the >90%
+    /// Fire when the dashboard's displayed primary window enters the >90%
     /// zone for a provider.
     /// Triggers on:
     ///   - first observation that's already over the threshold (no previous data)
@@ -174,7 +174,7 @@ enum LocalUsageNotifier {
                 identifier: "lowquota-\(metric.provider.rawValue)",
                 content: notificationContent(
                     title: "額度即將用完",
-                    body: "\(metric.provider.displayName) 5 小時剩餘額度低於 10%。"
+                    body: "\(metric.provider.displayName) \(UsageMetric.windowLabel(durationMins: metric.resolvedPrimaryWindowDurationMins))額度剩餘低於 10%。"
                 ),
                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
             )
@@ -182,8 +182,9 @@ enum LocalUsageNotifier {
         }
     }
 
-    /// Pre-schedule a single request per displayed provider's 5h and weekly
-    /// reset dates. The dashboard snapshot is authoritative: pending requests
+    /// Pre-schedule requests for each displayed provider window. The provider-
+    /// reported duration decides whether the short-term or weekly toggle applies.
+    /// The dashboard snapshot is authoritative: pending requests
     /// from a previous per-Mac version or a prior winner are replaced on sync.
     static func scheduleResetReminders(for aggregate: AggregateSnapshot) async {
         let fiveHourEnabled = NotificationManager.shared.resetEnabled
@@ -198,40 +199,57 @@ enum LocalUsageNotifier {
         let now = Date()
         guard let display = aggregate.displaySnapshot(at: now) else { return }
         for metric in display.metrics {
-            if fiveHourEnabled,
-               let resetDate = metric.resetDate,
-               resetDate > now {
-                let request = UNNotificationRequest(
-                    identifier: "reset-\(metric.provider.rawValue)",
-                    content: notificationContent(
-                        title: "5 小時額度已重置",
-                        body: "\(metric.provider.displayName) 5 小時用量已重置，可以繼續用了。"
-                    ),
-                    trigger: UNTimeIntervalNotificationTrigger(
-                        timeInterval: max(1, resetDate.timeIntervalSinceNow),
-                        repeats: false
-                    )
-                )
-                try? await center.add(request)
-            }
-
-            if weeklyEnabled,
-               let weeklyResetDate = metric.weeklyResetDate,
-               weeklyResetDate > now {
-                let request = UNNotificationRequest(
-                    identifier: "weeklyreset-\(metric.provider.rawValue)",
-                    content: notificationContent(
-                        title: "每週額度已重置",
-                        body: "\(metric.provider.displayName) 每週用量已重置，可以繼續用了。"
-                    ),
-                    trigger: UNTimeIntervalNotificationTrigger(
-                        timeInterval: max(1, weeklyResetDate.timeIntervalSinceNow),
-                        repeats: false
-                    )
-                )
-                try? await center.add(request)
-            }
+            await scheduleReset(
+                provider: metric.provider,
+                slot: "primary",
+                resetDate: metric.resetDate,
+                durationMins: metric.resolvedPrimaryWindowDurationMins,
+                shortTermEnabled: fiveHourEnabled,
+                weeklyEnabled: weeklyEnabled,
+                center: center,
+                now: now
+            )
+            await scheduleReset(
+                provider: metric.provider,
+                slot: "secondary",
+                resetDate: metric.weeklyResetDate,
+                durationMins: metric.resolvedSecondaryWindowDurationMins,
+                shortTermEnabled: fiveHourEnabled,
+                weeklyEnabled: weeklyEnabled,
+                center: center,
+                now: now
+            )
         }
+    }
+
+    private static func scheduleReset(
+        provider: ProviderKind,
+        slot: String,
+        resetDate: Date?,
+        durationMins: Int,
+        shortTermEnabled: Bool,
+        weeklyEnabled: Bool,
+        center: UNUserNotificationCenter,
+        now: Date
+    ) async {
+        guard let resetDate, resetDate > now else { return }
+        let isWeekly = durationMins >= 7 * 24 * 60
+        guard isWeekly ? weeklyEnabled : shortTermEnabled else { return }
+
+        let prefix = isWeekly ? "weeklyreset" : "reset"
+        let label = UsageMetric.windowLabel(durationMins: durationMins)
+        let request = UNNotificationRequest(
+            identifier: "\(prefix)-\(provider.rawValue)-\(slot)",
+            content: notificationContent(
+                title: "\(label)額度已重置",
+                body: "\(provider.displayName) \(label)用量已重置，可以繼續用了。"
+            ),
+            trigger: UNTimeIntervalNotificationTrigger(
+                timeInterval: max(1, resetDate.timeIntervalSinceNow),
+                repeats: false
+            )
+        )
+        try? await center.add(request)
     }
 
     static func cancelLowQuotaWarnings() async {

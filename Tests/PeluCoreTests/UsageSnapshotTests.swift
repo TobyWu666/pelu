@@ -143,8 +143,8 @@ import Testing
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     let snapshot = CodexQuotaSnapshot(
         rateLimits: .init(
-            primary: .init(usedPercent: 73, resetsAt: Int64(now.addingTimeInterval(-1).timeIntervalSince1970)),
-            secondary: .init(usedPercent: 19, resetsAt: Int64(now.addingTimeInterval(3600).timeIntervalSince1970))
+            primary: .init(usedPercent: 73, windowDurationMins: 10_080, resetsAt: Int64(now.addingTimeInterval(-1).timeIntervalSince1970)),
+            secondary: .init(usedPercent: 19, windowDurationMins: 1_440, resetsAt: Int64(now.addingTimeInterval(3600).timeIntervalSince1970))
         ),
         fetchedAt: now.addingTimeInterval(-30),
         source: .appServerRead
@@ -153,6 +153,8 @@ import Testing
     let metric = snapshot.asUsageMetric(now: now)
     #expect(metric.usedPercent == 0)
     #expect(metric.weeklyPercent == 19)
+    #expect(metric.primaryWindowDurationMins == 10_080)
+    #expect(metric.secondaryWindowDurationMins == 1_440)
     #expect(metric.dataSource == .officialQuota)
     #expect(metric.measuredAt == now.addingTimeInterval(-30))
 }

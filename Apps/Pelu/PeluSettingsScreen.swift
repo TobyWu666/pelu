@@ -101,7 +101,7 @@ struct PeluSettingsScreen: View {
                     Task { await handleToggleChange(.lowQuota, enabled: enabled) }
                 }
 
-            Toggle("5 小時重置提醒", isOn: $resetEnabled)
+            Toggle("短期額度重置提醒", isOn: $resetEnabled)
                 .onChange(of: resetEnabled) { _, enabled in
                     Task { await handleToggleChange(.reset, enabled: enabled) }
                 }
@@ -112,8 +112,8 @@ struct PeluSettingsScreen: View {
                 }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("低額度警告：5 小時剩餘額度低於 10%（已使用 > 90%）時推送。")
-                Text("5 小時重置提醒：每個 5 小時視窗重置時通知。")
+                Text("低額度警告：目前主要額度剩餘低於 10%（已使用 > 90%）時推送。")
+                Text("短期額度重置提醒：5 小時或每日等短期視窗重置時通知。")
                 Text("每週重置提醒：7 天用量重置時通知。")
             }
             .font(.caption)

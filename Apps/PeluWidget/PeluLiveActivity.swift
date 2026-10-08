@@ -22,6 +22,7 @@ private struct LockScreenView: View {
                 percent: state.claudePercent,
                 weekly: state.claudeWeeklyPercent,
                 weeklyResetDate: state.claudeWeeklyResetDate,
+                weeklyDurationMins: state.claudeSecondaryWindowDurationMins,
                 status: UsageStatus.from(percent: state.claudePercent)
             )
 
@@ -32,6 +33,7 @@ private struct LockScreenView: View {
                 percent: state.codexPercent,
                 weekly: state.codexWeeklyPercent,
                 weeklyResetDate: state.codexWeeklyResetDate,
+                weeklyDurationMins: state.codexSecondaryWindowDurationMins,
                 status: UsageStatus.from(percent: state.codexPercent)
             )
         }
@@ -44,6 +46,7 @@ private struct LockScreenView: View {
         percent: Double?,
         weekly: Double?,
         weeklyResetDate: Date?,
+        weeklyDurationMins: Int?,
         status: UsageStatus
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -61,7 +64,7 @@ private struct LockScreenView: View {
 
             if let w = weekly {
                 HStack(spacing: 6) {
-                    Text("週")
+                    Text(UsageMetric.windowLabel(durationMins: weeklyDurationMins ?? 7 * 24 * 60, compact: true))
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.tertiary)
                     UsageBar(percent: w, tint: status.tintColor.opacity(0.55), height: 3)

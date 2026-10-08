@@ -163,15 +163,26 @@ struct UsageMetricCard: View {
                 PeluProgressBar(
                     value: PercentFormatter.progress(from: metric.usedPercent),
                     tint: metric.status.tintColor,
-                    cycleElapsed: fiveHourElapsedProgress(now: now)
+                    cycleElapsed: elapsedProgress(
+                        resetDate: metric.resetDate,
+                        durationMins: metric.resolvedPrimaryWindowDurationMins,
+                        now: now
+                    )
                 )
 
                 if let weekly = metric.weeklyPercent {
                     SecondaryBar(
-                        label: "Weekly",
+                        label: UsageMetric.windowLabel(
+                            durationMins: metric.resolvedSecondaryWindowDurationMins,
+                            compact: true
+                        ),
                         percent: weekly,
                         colorScheme: colorScheme,
-                        outerProgress: weeklyElapsedProgress(now: now)
+                        outerProgress: elapsedProgress(
+                            resetDate: metric.weeklyResetDate,
+                            durationMins: metric.resolvedSecondaryWindowDurationMins,
+                            now: now
+                        )
                     )
                 }
             }
@@ -206,10 +217,10 @@ struct UsageMetricCard: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     if let d = metric.resetDate {
-                        Text("5hr \(ResetTimeFormatter.string(from: d, now: now))")
+                        Text("\(UsageMetric.windowLabel(durationMins: metric.resolvedPrimaryWindowDurationMins)) \(ResetTimeFormatter.string(from: d, now: now))")
                     }
                     if let d = metric.weeklyResetDate {
-                        Text("7日 \(ResetTimeFormatter.string(from: d, now: now))")
+                        Text("\(UsageMetric.windowLabel(durationMins: metric.resolvedSecondaryWindowDurationMins)) \(ResetTimeFormatter.string(from: d, now: now))")
                     }
                     if metric.resetDate == nil && metric.weeklyResetDate == nil {
                         Text("重置時間未定")
@@ -246,24 +257,11 @@ struct UsageMetricCard: View {
         #endif
     }
 
-    private func fiveHourElapsedProgress(now: Date = Date()) -> Double? {
-        guard let resetDate = metric.resetDate else { return nil }
-        let windowDuration: TimeInterval = 5 * 60 * 60
+    private func elapsedProgress(resetDate: Date?, durationMins: Int, now: Date) -> Double? {
+        guard let resetDate, durationMins > 0 else { return nil }
+        let windowDuration = TimeInterval(durationMins * 60)
         let startDate = resetDate.addingTimeInterval(-windowDuration)
         return clampedProgress(now.timeIntervalSince(startDate) / windowDuration)
-    }
-
-    private func weeklyElapsedProgress(now: Date = Date()) -> Double {
-        if let resetDate = metric.weeklyResetDate {
-            let weekDuration: TimeInterval = 7 * 24 * 60 * 60
-            let startDate = resetDate.addingTimeInterval(-weekDuration)
-            return clampedProgress(now.timeIntervalSince(startDate) / weekDuration)
-        }
-
-        guard let week = Calendar.current.dateInterval(of: .weekOfYear, for: now) else {
-            return 0
-        }
-        return clampedProgress(now.timeIntervalSince(week.start) / week.duration)
     }
 
     private func clampedProgress(_ value: Double) -> Double {

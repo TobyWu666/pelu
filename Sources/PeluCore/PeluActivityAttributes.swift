@@ -12,6 +12,9 @@ public struct PeluActivityAttributes: ActivityAttributes {
         public var codexWeeklyPercent: Double?
         public var codexResetDate: Date?
         public var codexWeeklyResetDate: Date?
+        /// Provider-reported secondary window lengths; nil means the legacy 7-day window.
+        public var claudeSecondaryWindowDurationMins: Int?
+        public var codexSecondaryWindowDurationMins: Int?
         public var updatedAt: Date
 
         public init(
@@ -23,6 +26,8 @@ public struct PeluActivityAttributes: ActivityAttributes {
             codexWeeklyPercent: Double?,
             codexResetDate: Date? = nil,
             codexWeeklyResetDate: Date? = nil,
+            claudeSecondaryWindowDurationMins: Int? = nil,
+            codexSecondaryWindowDurationMins: Int? = nil,
             updatedAt: Date = Date()
         ) {
             self.claudePercent = claudePercent
@@ -33,6 +38,8 @@ public struct PeluActivityAttributes: ActivityAttributes {
             self.codexWeeklyPercent = codexWeeklyPercent
             self.codexResetDate = codexResetDate
             self.codexWeeklyResetDate = codexWeeklyResetDate
+            self.claudeSecondaryWindowDurationMins = claudeSecondaryWindowDurationMins
+            self.codexSecondaryWindowDurationMins = codexSecondaryWindowDurationMins
             self.updatedAt = updatedAt
         }
 
@@ -48,6 +55,8 @@ public struct PeluActivityAttributes: ActivityAttributes {
                 codexWeeklyPercent: codex?.weeklyPercent,
                 codexResetDate: codex?.resetDate,
                 codexWeeklyResetDate: codex?.weeklyResetDate,
+                claudeSecondaryWindowDurationMins: claude?.secondaryWindowDurationMins,
+                codexSecondaryWindowDurationMins: codex?.secondaryWindowDurationMins,
                 updatedAt: snapshot.generatedAt
             )
         }

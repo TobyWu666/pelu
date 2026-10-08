@@ -152,9 +152,9 @@ struct iOSOnboardingView: View {
                 }
                 Toggle(isOn: $resetEnabled) {
                     VStack(alignment: .leading) {
-                        Text("5 小時重置提醒")
+                        Text("短期額度重置提醒")
                             .font(.callout.weight(.semibold))
-                        Text("5 小時視窗重置時提醒")
+                        Text("5 小時或每日等短期視窗重置時提醒")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

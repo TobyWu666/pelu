@@ -112,7 +112,7 @@ struct CodexJSONLReader {
     }
 
     private func candidateJSONLFiles() -> [URL] {
-        // Codex rate_limits 是 5h / 7d 滾動式 window；昨天最後一筆 event 的 rate_limits
+        // Codex rate_limits 是 provider 定義的滾動式 window；昨天最後一筆 event 的 rate_limits
         // 在 reset 前仍代表當前 quota。所以掃最近 8 天，找 modification date 最新的 jsonl。
         let now = Date()
         let cal = Calendar.current
@@ -209,6 +209,8 @@ struct CodexJSONLReader {
         let resetDate = (primary?["resets_at"] as? Double).map { Date(timeIntervalSince1970: $0) }
         let rawWeekly = secondary?["used_percent"] as? Double
         let weeklyResetDate = (secondary?["resets_at"] as? Double).map { Date(timeIntervalSince1970: $0) }
+        let primaryDurationMins = Self.windowDurationMins(from: primary)
+        let secondaryDurationMins = Self.windowDurationMins(from: secondary)
 
         // 若 reset 時間已過代表 window 已滾動但 user 沒新 event，當前實際 quota 是 0
         let now = Date()
@@ -227,11 +229,21 @@ struct CodexJSONLReader {
             provider: .codex,
             usedPercent: primaryPercent,
             weeklyPercent: weeklyPercent,
+            primaryWindowDurationMins: primaryDurationMins,
+            secondaryWindowDurationMins: secondaryDurationMins,
             resetDate: resetDate,
             weeklyResetDate: weeklyResetDate,
             dataSource: .localEstimate,
             measuredAt: measuredAt
         )
+    }
+
+    private static func windowDurationMins(from window: [String: Any]?) -> Int? {
+        let keys = ["window_duration_mins", "window_minutes", "windowDurationMins"]
+        for key in keys {
+            if let value = window?[key] as? NSNumber { return value.intValue }
+        }
+        return nil
     }
 }
 
@@ -242,6 +254,9 @@ struct CodexJSONLReader {
 @Observable
 final class UsageMonitor: @unchecked Sendable {
     private(set) var snapshot: UsageSnapshot = .demo()
+    /// Main-thread mirror of `recordedHistory` for the analysis window.
+    private(set) var history = MacUsageHistory()
+    private(set) var historyError: String?
 
     var showClaude: Bool {
         didSet { UserDefaults.standard.set(showClaude, forKey: "pelu.menubar.showClaude") }
@@ -259,6 +274,10 @@ final class UsageMonitor: @unchecked Sendable {
     /// dispatch its main-thread write *after* the faster (RPC) one, leaving
     /// the UI on the localEstimate metric and surfacing the "估算" badge.
     private let refreshQueue = DispatchQueue(label: "org.tobywu.pelu.refresh", qos: .utility)
+    private let historyStore = MacUsageHistoryStore()
+    /// Owned by `refreshQueue`. Loaded once so a refresh doesn't re-read the
+    /// whole history file; an unreadable file starts a fresh history.
+    private var recordedHistory: MacUsageHistory?
     private let codexQuotaProvider = CodexQuotaProvider(
         clientInfo: .init(
             name: "Pelu",
@@ -329,8 +348,9 @@ final class UsageMonitor: @unchecked Sendable {
             guard let self else { return }
 
             let claudeMetric: UsageMetric
-            if let data = try? Data(contentsOf: self.claudeFilePath),
-               let parsed = try? self.claudeParser.parse(data: data) {
+            if let measuredAt = try? self.claudeFilePath.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+               let data = try? Data(contentsOf: self.claudeFilePath),
+               let parsed = try? self.claudeParser.parse(data: data, generatedAt: measuredAt) {
                 claudeMetric = parsed
             } else {
                 claudeMetric = UsageMetric(
@@ -377,7 +397,24 @@ final class UsageMonitor: @unchecked Sendable {
                 source: .local,
                 metrics: [claudeMetric, codexMetricWithTokens]
             )
+            let isFirstLoad = self.recordedHistory == nil
+            var history = self.recordedHistory ?? (try? self.historyStore.load()) ?? MacUsageHistory()
+            var historyError: String?
+            let historyChanged = history.record(snap)
+            if historyChanged {
+                do {
+                    try self.historyStore.save(history)
+                } catch {
+                    historyError = "歷史資料無法寫入，請確認本機儲存空間與權限。"
+                }
+            }
+            self.recordedHistory = history
+            let updatedHistory = historyChanged || isFirstLoad ? history : nil
+            let updatedHistoryError = historyError
             DispatchQueue.main.async {
+                if let updatedHistory { self.history = updatedHistory }
+                // Keep a save error visible until a later save succeeds.
+                if historyChanged { self.historyError = updatedHistoryError }
                 self.snapshot = snap
                 self.updateCodexFileWatchers(fileURLs: activeCodexFiles)
                 self.updateCodexDirectoryWatcher(directoryURL: codexSessionsDirectory)
@@ -606,6 +643,12 @@ struct PeluMacApp: App {
             uploadSnapshotToCloud(newSnapshot)
         }
 
+        Window("Pelu 用量分析", id: "pelu-analysis") {
+            PeluMacAnalysisView(snapshot: monitor.snapshot, history: monitor.history, historyError: monitor.historyError)
+                .background(FloatingWindowConfigurator())
+        }
+        .defaultSize(width: 880, height: 700)
+
         Window("歡迎使用 Pelu", id: PeluMacApp.onboardingWindowID) {
             MacOnboardingView()
         }
@@ -690,8 +733,8 @@ private struct MacMenuBarContent<BottomBar: View>: View {
     @State private var didTryOpenOnboarding = false
 
     var body: some View {
-        PeluDashboardView(snapshot: monitor.snapshot)
-            .frame(width: 360, height: 520)
+        PeluMacDashboardView(snapshot: monitor.snapshot, refreshAction: { monitor.refresh() }, analysisAction: { openWindow(id: "pelu-analysis") })
+            .frame(width: 392)
             .overlay(alignment: .bottomTrailing) {
                 bottomBar()
                     .padding(10)
@@ -751,6 +794,8 @@ private struct MenuBarPopoverPinner: NSViewRepresentable {
                 keyObserver = nil
             }
             guard let window else { return }
+            window.isOpaque = false
+            window.backgroundColor = .clear
             window.isMovable = false
             window.isMovableByWindowBackground = false
 
@@ -809,6 +854,7 @@ private struct MacBottomBar: View {
                 .background(.regularMaterial, in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Pelu 設定")
         .help("設定")
     }
 }

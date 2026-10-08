@@ -17,16 +17,21 @@ public enum UsageDataSource: String, Codable, Sendable {
 
 public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
     public let provider: ProviderKind
-    /// Primary rate-limit usage — 5-hour window for Claude Code and Codex.
+    /// Primary rate-limit usage. Its duration is provider-controlled and may
+    /// change over time (for example, Codex moved from 5 hours to 7 days).
     public let usedPercent: Double?
-    /// 7-day (weekly) rate-limit usage, shown as a secondary bar.
+    /// Legacy name for the provider's secondary rate-limit window.
     public let weeklyPercent: Double?
+    /// Provider-reported duration for the primary window.
+    public let primaryWindowDurationMins: Int?
+    /// Provider-reported duration for the secondary window.
+    public let secondaryWindowDurationMins: Int?
     /// Context window fill for the current session (Claude Code only).
     public let contextWindowPercent: Double?
     public let costTodayUSD: Decimal?
-    /// Reset time for the 5-hour window.
+    /// Reset time for the primary window.
     public let resetDate: Date?
-    /// Reset time for the 7-day window.
+    /// Reset time for the secondary window (legacy property name).
     public let weeklyResetDate: Date?
     public let status: UsageStatus
     public let note: String?
@@ -52,6 +57,8 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
         provider: ProviderKind,
         usedPercent: Double?,
         weeklyPercent: Double? = nil,
+        primaryWindowDurationMins: Int? = nil,
+        secondaryWindowDurationMins: Int? = nil,
         contextWindowPercent: Double? = nil,
         costTodayUSD: Decimal? = nil,
         resetDate: Date? = nil,
@@ -65,6 +72,8 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
         self.provider = provider
         self.usedPercent = usedPercent
         self.weeklyPercent = weeklyPercent
+        self.primaryWindowDurationMins = primaryWindowDurationMins
+        self.secondaryWindowDurationMins = secondaryWindowDurationMins
         self.contextWindowPercent = contextWindowPercent
         self.costTodayUSD = costTodayUSD
         self.resetDate = resetDate
@@ -91,6 +100,8 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             provider: provider,
             usedPercent: resolvedPrimary,
             weeklyPercent: resolvedWeekly,
+            primaryWindowDurationMins: primaryWindowDurationMins,
+            secondaryWindowDurationMins: secondaryWindowDurationMins,
             contextWindowPercent: contextWindowPercent,
             costTodayUSD: costTodayUSD,
             resetDate: resetDate,
@@ -110,6 +121,8 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             provider: provider,
             usedPercent: usedPercent,
             weeklyPercent: weeklyPercent,
+            primaryWindowDurationMins: primaryWindowDurationMins,
+            secondaryWindowDurationMins: secondaryWindowDurationMins,
             contextWindowPercent: contextWindowPercent,
             costTodayUSD: costTodayUSD,
             resetDate: resetDate,
@@ -120,5 +133,28 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             measuredAt: measuredAt,
             tokenUsage: tokenUsage
         )
+    }
+
+    /// Old CloudKit payloads predate duration metadata. Their primary and
+    /// secondary fields represented 5-hour and 7-day windows respectively.
+    public var resolvedPrimaryWindowDurationMins: Int {
+        primaryWindowDurationMins ?? 5 * 60
+    }
+
+    public var resolvedSecondaryWindowDurationMins: Int {
+        secondaryWindowDurationMins ?? 7 * 24 * 60
+    }
+
+    public static func windowLabel(durationMins: Int, compact: Bool = false) -> String {
+        if durationMins == 24 * 60 { return compact ? "日" : "每日" }
+        if durationMins % (24 * 60) == 0 {
+            let days = durationMins / (24 * 60)
+            return compact ? "\(days)日" : "\(days) 日"
+        }
+        if durationMins % 60 == 0 {
+            let hours = durationMins / 60
+            return compact ? "\(hours)h" : "\(hours) 小時"
+        }
+        return compact ? "\(durationMins)m" : "\(durationMins) 分鐘"
     }
 }

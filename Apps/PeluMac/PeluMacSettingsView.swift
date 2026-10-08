@@ -15,6 +15,9 @@ struct PeluMacSettingsView: View {
         status: .unknown(underlying: "checking"),
         userRecordName: nil
     )
+    @AppStorage("pelu.mac.quotaDisplayStyle") private var quotaDisplayStyle = "rings"
+    @AppStorage("pelu.mac.panelProviders") private var panelProviders = MacPanelProviders.all
+    @State private var settingsTab = 0
     @State private var hookInstallToast: String?
     @State private var pendingLinkAlert = false
     @State private var launchAtLogin: Bool = LaunchAtLogin.isEnabled
@@ -26,19 +29,35 @@ struct PeluMacSettingsView: View {
     private static let phonePromoURL: URL? = URL(string: "https://pelu.wutoby.com/index.html#top")
 
     var body: some View {
-        Form {
-            phonePromoSection
-            brandSection
-            menuBarSection
-            launchSection
-            iCloudSection
-            updatesSection
-            resourcesSection
-            advancedSection
-            aboutSection
+        VStack(spacing: 0) {
+            Picker("設定分類", selection: $settingsTab) {
+                Text("一般").tag(0)
+                Text("服務與同步").tag(1)
+                Text("更新與關於").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .padding(20)
+            Form {
+                switch settingsTab {
+                case 0:
+                    menuBarSection
+                    panelProvidersSection
+                    quotaAppearanceSection
+                    launchSection
+                case 1:
+                    iCloudSection
+                    phonePromoSection
+                    advancedSection
+                default:
+                    brandSection
+                    updatesSection
+                    resourcesSection
+                    aboutSection
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
         .background(PeluTheme.background(for: colorScheme))
         .frame(minWidth: 460, idealWidth: 520, minHeight: 480, idealHeight: 560)
         .task {
@@ -50,6 +69,43 @@ struct PeluMacSettingsView: View {
             Text("這個頁面還沒上線，敬請期待。")
         }
         .navigationTitle("Pelu 設定")
+    }
+
+    private var panelProvidersSection: some View {
+        Section {
+            panelProviderToggle("Claude Code", provider: .claudeCode)
+            panelProviderToggle("Codex", provider: .codex)
+        } header: {
+            Text("面板顯示服務")
+        } footer: {
+            Text("至少保留一個服務。此設定控制展開面板中的用量卡片。")
+                .font(.caption)
+        }
+    }
+
+    private func panelProviderToggle(_ title: String, provider: ProviderKind) -> some View {
+        let isLastVisible = panelProviders != .all && panelProviders.includes(provider)
+        return Toggle(title, isOn: Binding(
+            get: { panelProviders.includes(provider) },
+            set: { panelProviders = panelProviders.setting(provider, visible: $0) }
+        ))
+        .disabled(isLastVisible)
+        .help(isLastVisible ? "至少保留一個服務；先開啟另一個服務即可關閉此項。" : "在用量面板顯示或隱藏此服務")
+    }
+
+    private var quotaAppearanceSection: some View {
+        Section {
+            Picker("用量呈現", selection: $quotaDisplayStyle) {
+                Text("雙環").tag("rings")
+                Text("橫條").tag("bars")
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("面板外觀")
+        } footer: {
+            Text("雙環的外環顯示已用額度，藍色內環顯示週期已過時間。選擇橫條可回到原本的呈現方式。")
+                .font(.caption)
+        }
     }
 
     // MARK: - Phone promo
@@ -276,7 +332,8 @@ struct PeluMacSettingsView: View {
     private var aboutSection: some View {
         Section("關於") {
             LabeledContent("版本", value: Self.appVersion)
-            LabeledContent("資料儲存位置", value: "你的 iCloud")
+            LabeledContent("最新用量", value: "你的 iCloud")
+            LabeledContent("Mac 歷史紀錄", value: "本機保留 30 天")
         }
     }
 

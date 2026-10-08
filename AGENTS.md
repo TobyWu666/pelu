@@ -39,12 +39,12 @@ App target 定義在 `Pelu.xcodeproj`（主要 scheme：`Pelu`、`PeluMac`、`Pe
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-swift test
+swift test --scratch-path "${TMPDIR:-/tmp}/pelu-swiftpm"
 xcodebuild -project Pelu.xcodeproj -scheme PeluMac -destination 'generic/platform=macOS' build
 xcodebuild -project Pelu.xcodeproj -scheme Pelu    -destination 'generic/platform=iOS'   build
 ```
 
-改了 `PeluCore` / `PeluUI` 至少跑 `swift test` + 受影響 app 的 xcodebuild。Sandbox 內 `codesign --verify` 可能誤報失敗，簽章驗證要在完整系統環境跑。
+repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesign 會拒簽測試 bundle，所以 SwiftPM 的 build 目錄要放在 iCloud 外（`--scratch-path`；xcodebuild 用 `-derivedDataPath` 同理）。改了 `PeluCore` / `PeluUI` 至少跑 `swift test` + 受影響 app 的 xcodebuild。Sandbox 內 `codesign --verify` 可能誤報失敗，簽章驗證要在完整系統環境跑。
 
 ## 4. 資料流與關鍵規則
 
@@ -110,4 +110,4 @@ codesign -d --entitlements - build-release/Build/Products/Release/PeluMac.app   
 
 格式：`- [agent] 範圍 — 涉及檔案 — 開始日期`
 
-- [Claude] 接手 Codex 未提交的 WIP 並補完：provider 回傳的視窗長度（`primaryWindowDurationMins` / `secondaryWindowDurationMins`）、Mac 本機用量歷史（`MacUsageHistory`）、新 menu bar popover（`PeluMacDashboardView`）、用量分析視窗（`PeluMacAnalysisView`）— `Sources/PeluCore`、`Sources/PeluUI`、`Apps/*`、`Tests/` — 2026-10-08
+（目前無）

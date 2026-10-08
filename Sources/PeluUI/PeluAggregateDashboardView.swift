@@ -69,7 +69,7 @@ public struct PeluAggregateDashboardView: View {
         }
     }
 
-    /// Highest displayed 5h usage. Use the same composite metrics as the
+    /// Highest displayed primary-window usage. Use the same composite metrics as the
     /// cards, so a stale Codex record cannot contradict a newer reset below.
     private func busiestUsedPercent(at now: Date) -> Double? {
         aggregate.displaySnapshot(at: now)?.metrics.compactMap(\.usedPercent).max()
@@ -77,7 +77,7 @@ public struct PeluAggregateDashboardView: View {
 
     private func subheading(at now: Date) -> String {
         guard let percent = busiestUsedPercent(at: now) else { return "尚無資料" }
-        return "目前最高 5 小時用量 \(Int(percent.rounded()))%"
+        return "目前最高用量 \(Int(percent.rounded()))%"
     }
 
     /// 5 分鐘沒新資料就視為斷線。TimelineView 每分鐘 tick 一次，所以即使

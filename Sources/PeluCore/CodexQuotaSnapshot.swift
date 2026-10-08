@@ -113,6 +113,8 @@ public struct CodexQuotaSnapshot: Codable, Equatable, Sendable {
             provider: .codex,
             usedPercent: primaryPercent,
             weeklyPercent: weeklyPercent,
+            primaryWindowDurationMins: primary?.windowDurationMins,
+            secondaryWindowDurationMins: secondary?.windowDurationMins,
             resetDate: primary?.resetDate,
             weeklyResetDate: secondary?.resetDate,
             dataSource: .officialQuota,
