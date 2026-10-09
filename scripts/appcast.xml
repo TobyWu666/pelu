@@ -14,6 +14,33 @@
     -->
 
     <item>
+      <title>Pelu 1.0.11</title>
+      <pubDate>Fri, 09 Oct 2026 04:18:28 +0000</pubDate>
+      <sparkle:version>12</sparkle:version>
+      <sparkle:shortVersionString>1.0.11</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>新功能</h3>
+        <ul>
+          <li>Claude 用量改讀 Claude Code /usage 的資料來源，IDE 擴充套件、桌面版與 claude.ai 的用量也會算進來</li>
+          <li>新的選單列面板：圓環或長條兩種樣式，可個別隱藏 Claude / Codex</li>
+          <li>新增「用量分析」視窗，顯示最近 30 天的配額走勢</li>
+          <li>配額視窗長度改由服務提供者決定，不再固定 5 小時 / 7 天</li>
+          <li>設定視窗改成分頁</li>
+        </ul>
+        <h3>修正</h3>
+        <ul>
+          <li>修正抓不到 ChatGPT.app（原 Codex.app）內附的 codex，導致 Codex 只能顯示本機估算</li>
+          <li>Claude 的「更新於」時間改為實際量測時間</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.11/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="Vabrw4/J0ojRvk1QMEIpnP7f7gVNpL7kcBS72mwN9K0XSQRQffhN8fbXfUlFk+dMPpL9wUF6a/5owd4Dx96qDw==" length="2680452" />
+    </item>
+
+    <item>
       <title>Pelu 1.0.10</title>
       <pubDate>Fri, 29 May 2026 08:47:26 +0000</pubDate>
       <sparkle:version>11</sparkle:version>
