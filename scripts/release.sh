@@ -34,7 +34,9 @@ fi
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/build-release"
+# Outside iCloud Drive: synced files pick up com.apple.FinderInfo and codesign
+# rejects the bundle ("resource fork, Finder information, or similar detritus").
+BUILD_DIR="${PELU_BUILD_DIR:-${TMPDIR:-/tmp}/pelu-build-release}"
 PRODUCTS_DIR="$BUILD_DIR/Build/Products/Release"
 DIST_DIR="$PROJECT_ROOT/dist"
 DMG_BG="$SCRIPT_DIR/dmg-background.tiff"

@@ -97,7 +97,7 @@ gh release create v<version> dist/PeluMac.dmg --repo TobyWu666/pelu-releases --t
 # 把 <item> 貼到 scripts/appcast.xml 最上方並 commit，再複製到 TobyWu666/pelu-web 的 appcast.xml 並 push
 ```
 
-前置：Keychain 有 Developer ID Application 憑證與 Sparkle 私鑰（首次用 `scripts/generate-sparkle-keys.sh` 產生，存於 `https://sparkle-project.org`；務必另有離線備份）、已安裝 Developer ID provisioning profile、`xcrun notarytool store-credentials pelu-notary`、`brew install create-dmg`。
+前置：Keychain 有 Developer ID Application 憑證與 Sparkle 私鑰（首次用 `scripts/generate-sparkle-keys.sh` 產生，Keychain service `https://sparkle-project.org`；備份在 `.secrets/sparkle-ed25519-private-key.txt`，新 Mac 用 `generate_keys -f` 匯入，另有離線備份）、已安裝 Developer ID provisioning profile（`Pelu Mac Developer ID`，必須包含這台 Mac Keychain 裡那張 Developer ID 憑證，換 Mac 時在 developer.apple.com 編輯 profile 勾選憑證並重新下載）、`xcrun notarytool store-credentials pelu-notary`、`brew install create-dmg`。
 
 易踩雷（`release.sh` 已處理，改腳本時別弄壞）：
 
@@ -111,7 +111,7 @@ gh release create v<version> dist/PeluMac.dmg --repo TobyWu666/pelu-releases --t
 curl -fsSL https://pelu.wutoby.com/appcast.xml | head -40
 curl -ILs https://github.com/TobyWu666/pelu-releases/releases/latest/download/PeluMac.dmg | head
 spctl --assess --type install --verbose=4 dist/PeluMac.dmg
-codesign -d --entitlements - build-release/Build/Products/Release/PeluMac.app   # 要看到 application-identifier 與 team-identifier
+codesign -d --entitlements - "${TMPDIR:-/tmp}/pelu-build-release/Build/Products/Release/PeluMac.app"   # 要看到 application-identifier 與 team-identifier
 ```
 
 手動 QA：從 DMG 開啟應提示移到 `/Applications`；登入時啟動實測；重置 onboarding 走完會自動關窗；裝上一版用「立即檢查更新」走完整 Sparkle 升級；Codex 有活動時 menu bar 顯示 official quota 且 log 無連續 CloudKit conflict。

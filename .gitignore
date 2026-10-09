@@ -14,3 +14,8 @@ xcuserdata/
 .secrets/
 *.p8
 .vscode/
+*.p12
+*.cer
+*.certSigningRequest
+*.provisionprofile
+*.mobileprovision
