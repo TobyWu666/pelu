@@ -60,14 +60,14 @@ repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesi
 
 ```
 SUFeedURL         https://pelu.wutoby.com/appcast.xml
-SUPublicEDKey     3BXIeW0MQHP3rPFeLEEO5kL4R6z0JGUau2975UX8GoE=
+SUPublicEDKey     pBmFC7cROkIY05Xzcu6tAQipN2iUzz2HUdlhN3rf5qg=   （1.0.11 起；≤1.0.10 是 3BXIeW0MQHP3rPFeLEEO5kL4R6z0JGUau2975UX8GoE=，私鑰已遺失）
 DMG asset name    PeluMac.dmg
 CloudKit          iCloud.org.tobywu.pelu（record type MacSnapshot，schema v1）
 App Group         group.org.tobywu.pelu
 Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 ```
 
-- 改 feed URL 或 Sparkle 公鑰 → 既有安裝者收不到更新。
+- 改 feed URL → 既有安裝者收不到更新。Sparkle 公鑰只能靠 key rotation 更換：新版必須用同一張 Developer ID 簽、`SUVerifyUpdateBeforeExtraction` 保持關閉，而且 EdDSA 金鑰和 Developer ID 憑證不能在同一版一起換。1.0.11 就是這樣換的。
 - `CFBundleVersion` 每次發版必須遞增（Sparkle 以它判斷新版）。`pbxproj` 裡的 `MARKETING_VERSION = 1.0.0` 是佔位，實際版號由 `release.sh` 帶入。
 - CloudKit record 欄位只能**新增**、舊欄位要保持可讀，因為新舊版 Mac / iPhone 會同時存在。
 - Sparkle `SU*` key 只能放在 `Apps/PeluMac/Info.plist`（Mac target 保持 `GENERATE_INFOPLIST_FILE = NO`），放 `INFOPLIST_KEY_SU*` 會在開設定時 crash。

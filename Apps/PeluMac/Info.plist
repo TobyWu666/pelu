@@ -29,7 +29,7 @@
 	<key>SUFeedURL</key>
 	<string>https://pelu.wutoby.com/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>3BXIeW0MQHP3rPFeLEEO5kL4R6z0JGUau2975UX8GoE=</string>
+	<string>pBmFC7cROkIY05Xzcu6tAQipN2iUzz2HUdlhN3rf5qg=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
 	<key>SUScheduledCheckInterval</key>
