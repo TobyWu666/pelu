@@ -172,7 +172,7 @@ Mac 發版流程(`scripts/release.sh`、Sparkle、Notarization)、App Store Conn
 
 本專案以 [MIT License](./LICENSE) 釋出。
 
-捆綁的 [Source Han Serif TC](https://github.com/adobe-fonts/source-han-serif) 字型由 Adobe 設計,以 SIL Open Font License 1.1 授權——授權條文見 [`Apps/Pelu/Resources/Fonts/LICENSE.txt`](./Apps/Pelu/Resources/Fonts/LICENSE.txt)。
+捆綁的 [Source Han Serif TC](https://github.com/adobe-fonts/source-han-serif) 字型由 Adobe 設計,以 SIL Open Font License 1.1 授權——授權條文見 [`Apps/Pelu/Resources/Fonts/LICENSE.txt`](./Apps/Pelu/Resources/Fonts/LICENSE.txt),署名見 [NOTICE](./NOTICE)。
 
 ---
 

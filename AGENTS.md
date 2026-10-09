@@ -70,6 +70,7 @@ Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 - `CFBundleVersion` 每次發版必須遞增（Sparkle 以它判斷新版）。`pbxproj` 裡的 `MARKETING_VERSION = 1.0.0` 是佔位，實際版號由 `release.sh` 帶入。
 - CloudKit record 欄位只能**新增**、舊欄位要保持可讀，因為新舊版 Mac / iPhone 會同時存在。
 - Sparkle `SU*` key 只能放在 `Apps/PeluMac/Info.plist`（Mac target 保持 `GENERATE_INFOPLIST_FILE = NO`），放 `INFOPLIST_KEY_SU*` 會在開設定時 crash。
+- 根目錄 `LICENSE` 只放標準 MIT 本文（含 copyright 行）。附加字型署名會讓 GitHub licensee 判成 NOASSERTION；Source Han Serif TC 的 OFL 署名放 `NOTICE`，條文在 `Apps/Pelu/Resources/Fonts/LICENSE.txt`。
 
 ## 6. 發版
 
