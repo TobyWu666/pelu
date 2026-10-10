@@ -755,13 +755,13 @@ struct PeluMacApp: App {
     }
 
     private func uploadSnapshotToCloud(_ snapshot: UsageSnapshot) {
-        // A Cursor placeholder would win the iPhone's newest-reading pick
-        // over another Mac's real one, so only measured readings leave.
+        // iOS 1.1 picks the newest Codex / Cursor reading across Macs, where a
+        // placeholder would beat another Mac's real one; only measured readings leave.
         let uploaded = UsageSnapshot(
             id: snapshot.id,
             generatedAt: snapshot.generatedAt,
             source: snapshot.source,
-            metrics: snapshot.metrics.filter { $0.provider != .cursor || $0.measuredAt != nil }
+            metrics: snapshot.metrics.filter { $0.provider == .claudeCode || $0.measuredAt != nil }
         )
         let mac = MacSnapshot(
             macId: MacIdentity.macId(),

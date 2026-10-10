@@ -120,6 +120,23 @@ private func cursorMac() -> MacSnapshot {
     #expect(decoded.snapshot.metrics.map(\.provider) == [.claudeCode, .codex, .cursor])
 }
 
+@Test func aggregateIgnoresCodexPlaceholderFromAnotherMac() {
+    let measured = Date(timeIntervalSince1970: 1_791_600_000)
+    let later = measured.addingTimeInterval(600)
+    let aggregate = AggregateSnapshot(macs: [
+        MacSnapshot(macId: "a", label: "A", snapshot: UsageSnapshot(generatedAt: measured, source: .cloud, metrics: [
+            UsageMetric(provider: .codex, usedPercent: 12, weeklyPercent: 5, dataSource: .officialQuota, measuredAt: measured),
+        ])),
+        MacSnapshot(macId: "b", label: "B", snapshot: UsageSnapshot(generatedAt: later, source: .cloud, metrics: [
+            UsageMetric(provider: .codex, usedPercent: nil, note: "今日無 Codex 使用紀錄"),
+        ])),
+    ])
+    #expect(aggregate.displaySnapshot(at: later)?.metric(for: .codex)?.usedPercent == 12)
+
+    let placeholderOnly = AggregateSnapshot(macs: [aggregate.macs[1]])
+    #expect(placeholderOnly.displaySnapshot(at: later)?.metric(for: .codex)?.note == "今日無 Codex 使用紀錄")
+}
+
 @Test func aggregateUsesNewestAccountWideCursorMeasurement() {
     let old = Date(timeIntervalSince1970: 1_791_600_000)
     let new = old.addingTimeInterval(600)

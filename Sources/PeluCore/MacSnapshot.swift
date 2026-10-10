@@ -57,7 +57,10 @@ public struct AggregateSnapshot: Codable, Equatable, Sendable {
                 }
             let winner: (metric: UsageMetric, generatedAt: Date, source: ConnectionSource)?
             if provider == .codex || provider == .cursor {
-                winner = candidates.max(by: {
+                // A Mac with nothing to report ("今日無 Codex 使用紀錄") has no
+                // measuredAt and would otherwise win on its fresh generatedAt.
+                let readings = candidates.filter { $0.metric.usedPercent != nil }
+                winner = (readings.isEmpty ? candidates : readings).max(by: {
                     let left = $0.metric.measuredAt ?? $0.generatedAt
                     let right = $1.metric.measuredAt ?? $1.generatedAt
                     return left < right

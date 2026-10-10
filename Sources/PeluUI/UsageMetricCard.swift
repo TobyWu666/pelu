@@ -58,34 +58,34 @@ private struct QuotaRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(.primary.opacity(0.08), lineWidth: 6)
+            Circle().stroke(.primary.opacity(0.08), lineWidth: 7)
             if let percent, percent.isFinite, percent > 0 {
                 Circle()
                     .trim(from: 0, to: PercentFormatter.progress(from: percent))
-                    .stroke(UsageStatus.from(percent: percent).tintColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(UsageStatus.from(percent: percent).tintColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
             Group {
                 Circle()
-                    .stroke(.primary.opacity(0.06), style: StrokeStyle(lineWidth: 3, dash: elapsed == nil ? [2, 4] : []))
+                    .stroke(.primary.opacity(0.06), lineWidth: 3.5)
                 if let elapsed {
                     Circle()
                         .trim(from: 0, to: min(1, max(0, elapsed)))
-                        .stroke(PeluTheme.sky, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .stroke(PeluTheme.sky, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 }
             }
-            .padding(9)
+            .padding(11)
             let weight: Font.Weight = prominent ? .semibold : .medium
             (Text(percent.map { "\(Int($0.rounded()))" } ?? "--")
-                .font(.system(size: prominent ? 18 : 16, weight: weight, design: .rounded))
+                .font(.system(size: prominent ? 22 : 19, weight: weight, design: .rounded))
              + Text("%")
-                .font(.system(size: prominent ? 11 : 10, weight: weight, design: .rounded)))
+                .font(.system(size: prominent ? 12 : 11, weight: weight, design: .rounded)))
                 .monospacedDigit()
                 .foregroundStyle(prominent ? .primary : .secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
         }
         .padding(3)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: percent)
@@ -123,9 +123,13 @@ struct UsageMetricCard: View {
         TimelineView(.periodic(from: Date(), by: 60)) { context in
             let current = metric.effective(at: context.date)
             Group {
-                switch style {
-                case .bars: barsCard(metric: current, now: context.date)
-                case .rings: ringsCard(metric: current, now: context.date)
+                if current.usedPercent == nil {
+                    emptyCard(metric: current)
+                } else {
+                    switch style {
+                    case .bars: barsCard(metric: current, now: context.date)
+                    case .rings: ringsCard(metric: current, now: context.date)
+                    }
                 }
             }
             .padding(16)
@@ -138,15 +142,34 @@ struct UsageMetricCard: View {
         }
     }
 
+    // MARK: Empty
+
+    /// Nothing measured yet: name and reason only, no hollow gauges.
+    private func emptyCard(metric: UsageMetric) -> some View {
+        HStack(spacing: 12) {
+            providerIcon(side: 30)
+            Text(metric.provider.displayName)
+                .font(.headline)
+                .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(metric.note ?? "尚無資料")
+                .font(.caption)
+                .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
     // MARK: Rings
 
     private func ringsCard(metric: UsageMetric, now: Date) -> some View {
         let stale = stalenessText(measuredAt: metric.measuredAt, now: now)
         let sharedReset = metric.sharesResetDate && metric.weeklyPercent != nil && stale == nil
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                providerIcon(side: 26)
+                providerIcon(side: 30)
                 Text(metric.provider.displayName)
                     .font(.headline)
                     .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
@@ -164,7 +187,7 @@ struct UsageMetricCard: View {
                 .lineLimit(1)
             }
 
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 ringColumn(
                     title: metric.windowTitle(secondary: false),
                     percent: metric.usedPercent,
@@ -184,27 +207,23 @@ struct UsageMetricCard: View {
                     )
                 }
             }
-
-            if metric.usedPercent == nil, let note = metric.note {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            }
         }
     }
 
+    /// Ring over its caption, centred in half the card, so the reset text gets
+    /// the full column width even with Bold Text / larger type.
     /// `reset` is nil when the card header already shows a shared reset.
     private func ringColumn(title: String, percent: Double?, elapsed: Double?, reset: Date??, prominent: Bool, now: Date) -> some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 8) {
             QuotaRing(percent: percent, elapsed: elapsed, prominent: prominent)
-                .frame(width: 70, height: 70)
+                .frame(width: 84, height: 84)
                 .accessibilityLabel("\(title) 配額")
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(spacing: 2) {
                 Text(title)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(PeluTheme.secondaryText(for: colorScheme))
                 if let reset {
-                    Text(reset.flatMap { ResetTimeFormatter.remaining(until: $0, now: now) }.map { "\($0)後" }
+                    Text(reset.flatMap { ResetTimeFormatter.remaining(until: $0, now: now) }.map { "\($0)後重置" }
                          ?? (reset == nil ? "重置時間未定" : "已重置"))
                         .font(.caption)
                         .monospacedDigit()
@@ -212,10 +231,9 @@ struct UsageMetricCard: View {
                 }
             }
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
+            .minimumScaleFactor(0.75)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Bars
