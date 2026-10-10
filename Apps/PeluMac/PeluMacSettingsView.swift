@@ -172,13 +172,20 @@ struct PeluMacSettingsView: View {
 
     private var menuBarSection: some View {
         Section {
-            Toggle("Claude %", isOn: $monitor.showClaude)
-            Toggle("Codex %", isOn: $monitor.showCodex)
-            Toggle("Cursor %", isOn: $monitor.showCursor)
+            Picker("顯示方式", selection: $monitor.menuBarStyle) {
+                Text("文字").tag("text")
+                Text("圓圈").tag("rings")
+            }
+            .pickerStyle(.segmented)
+            Toggle("Claude（C）", isOn: $monitor.showClaude)
+            Toggle("Codex（X）", isOn: $monitor.showCodex)
+            Toggle("Cursor（U）", isOn: $monitor.showCursor)
         } header: {
             Text("選單列顯示")
         } footer: {
-            Text("勾選的項目會跟著 Pelu logo 一起顯示在選單列上。")
+            Text(monitor.menuBarStyle == "rings"
+                 ? "每個勾選的服務一個圓圈：外圈是主要額度已用，藍色內圈是週期已過時間，中間字母代表服務。"
+                 : "勾選的項目會以百分比顯示在選單列上；全部不勾時只顯示 Pelu logo。")
                 .font(.caption2)
         }
     }

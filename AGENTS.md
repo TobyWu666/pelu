@@ -56,7 +56,7 @@ repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesi
 - **CloudKit**：record type `MacSnapshot`，record name `mac-{macId}`，container 一律用 `MacSnapshotRecord.containerIdentifier`（**不要用 `CKContainer.default()`**）。上傳要序列化／合併，避免 `Server Record Changed` 衝突。PeluMac 固定走 Production 環境；iOS Debug 走 Development。
 - **`payload` 只放 Claude / Codex**（`ProviderKind.fitsLegacyPayload`）：iOS ≤ 1.1 把 `payload` 當嚴格的 `[UsageMetric]` 解碼，多一個未知 provider 就整台 Mac 消失。其他 provider（目前是 Cursor）放 `extraMetrics`（Bytes，同格式 JSON）。新版 reader 對兩個欄位都逐筆容錯（`LossyMetrics`）。Production schema 沒有 `extraMetrics` 時存檔會被拒，`CloudKitSyncer` 會改成不帶 extras 重送並暫停一小時。**新增欄位要先在 CloudKit Console 的 Development 加好並 Deploy Schema Changes 到 Production**，再發 PeluMac。
 - **多 Mac 聚合**（`AggregateSnapshot.displaySnapshot`）：Claude 取最高用量；Codex / Cursor quota 是帳號層級，取**最新**一筆量測而不是最高值。
-- **Mac 面板**：顯示多個服務時，上方一排 tile（各自 primary % + secondary 小字），點選的服務在下方顯示完整雙環／橫條卡片（`pelu.mac.selectedProvider`）；`pelu.mac.panelProviders` 是逗號分隔的 provider rawValue，仍相容舊值 `all` / `claude` / `codex`。iOS 中型 widget 只放前兩個 provider，Live Activity 只有 Claude / Codex。
+- **Mac 面板**：顯示多個服務時，上方一排 tile（各自 primary % + secondary 小字），點選的服務在下方顯示完整雙環／橫條卡片（`pelu.mac.selectedProvider`）；`pelu.mac.panelProviders` 是逗號分隔的 provider rawValue，仍相容舊值 `all` / `claude` / `codex`。選單列 `pelu.menubar.style` 為 `text`（預設，`C 37%`）或 `rings`（`MenuBarRings` 畫成單張非 template NSImage：外圈 primary 用量、內圈 primary 視窗已過時間、中間 `ProviderKind.menuBarLetter`，Claude C / Codex X / Cursor U）。兩種模式都不放 logo，沒有任何內容可顯示時才退回 logo（否則選單列項目會消失點不到）。PeluMac 是 `LSUIElement`（不出現在 Dock / ⌘Tab），開視窗後要 `NSApp.activate()` 才拿得到鍵盤焦點。iOS 中型 widget 只放前兩個 provider，Live Activity 只有 Claude / Codex。
 - iPhone 端：`CKQuerySubscription` + silent push 觸發更新；App Group `group.org.tobywu.pelu` 給 Widget 讀。
 
 ## 5. 不可破壞的契約

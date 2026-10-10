@@ -30,6 +30,17 @@ private let summary = """
     #expect(metric.status == .warning)
 }
 
+@Test func primaryWindowElapsedTracksTimeToReset() throws {
+    let now = Date(timeIntervalSince1970: 1_791_600_000)
+    let metric = try CursorUsageParser().parse(data: Data(summary.utf8), fetchedAt: now, generatedAt: now)
+    let reset = try #require(metric.resetDate)
+    let quarterLeft = reset.addingTimeInterval(-Double(31 * 24 * 60 * 60) / 4)
+
+    #expect(abs((metric.primaryWindowElapsed(at: quarterLeft) ?? 0) - 0.75) < 0.0001)
+    #expect(metric.primaryWindowElapsed(at: reset.addingTimeInterval(1)) == nil)
+    #expect(UsageMetric(provider: .codex, usedPercent: 10).primaryWindowElapsed(at: now) == nil)
+}
+
 @Test func cursorFallsBackToDashboardMessagesWithoutPlan() throws {
     let json = """
     {"billingCycleStart":"2026-10-08T07:41:06.000Z","billingCycleEnd":"2026-11-08T07:41:06.000Z","isUnlimited":false,

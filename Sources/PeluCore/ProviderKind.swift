@@ -29,6 +29,18 @@ public enum ProviderKind: String, Codable, Sendable, CaseIterable, Identifiable 
         }
     }
 
+    /// Single letter for the menu bar, in text and ring styles alike.
+    public var menuBarLetter: String {
+        switch self {
+        case .claudeCode:
+            "C"
+        case .codex:
+            "X"
+        case .cursor:
+            "U"
+        }
+    }
+
     public var assetName: String {
         switch self {
         case .claudeCode:

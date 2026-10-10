@@ -267,6 +267,10 @@ final class UsageMonitor: @unchecked Sendable {
     var showCursor: Bool {
         didSet { UserDefaults.standard.set(showCursor, forKey: "pelu.menubar.showCursor") }
     }
+    /// "text" (C 37%) or "rings" (`MenuBarRings`).
+    var menuBarStyle: String {
+        didSet { UserDefaults.standard.set(menuBarStyle, forKey: "pelu.menubar.style") }
+    }
 
     private let claudeFilePath: URL
     private let claudeParser = ClaudeCodeParser()
@@ -312,6 +316,7 @@ final class UsageMonitor: @unchecked Sendable {
         showClaude = ud.object(forKey: "pelu.menubar.showClaude") as? Bool ?? true
         showCodex  = ud.object(forKey: "pelu.menubar.showCodex")  as? Bool ?? false
         showCursor = ud.object(forKey: "pelu.menubar.showCursor") as? Bool ?? false
+        menuBarStyle = ud.string(forKey: "pelu.menubar.style") ?? "text"
 
         claudeFilePath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/usag-status.json")
@@ -690,16 +695,34 @@ struct PeluMacApp: App {
     static let onboardingWindowID = "pelu-onboarding"
     static let settingsWindowID   = "pelu-settings"
 
+    @ViewBuilder
     private var menuBarLabel: some View {
-        HStack(spacing: 4) {
+        let rings = menuBarRingItems
+        let text = menuBarText
+        if monitor.menuBarStyle == "rings", !rings.isEmpty {
+            // One composed image: MenuBarExtra flattens its label, and a
+            // single NSImage keeps the rings evenly spaced.
+            Image(nsImage: MenuBarRings.image(items: rings))
+        } else if !text.isEmpty {
+            Text(text)
+        } else {
+            // Without the logo an empty label would leave nothing to click.
             // The PNG behind "PeluSimpleLogo" is 512×512 marked as 1x, so SwiftUI
             // treats its intrinsic point size as 512. MenuBarExtra ignores .frame()
             // for images; we have to give it an NSImage with `.size` pre-set.
             Image(nsImage: PeluMacApp.menuBarIcon)
-            let text = menuBarText
-            if !text.isEmpty {
-                Text(text)
-            }
+        }
+    }
+
+    private var menuBarProviders: [ProviderKind] {
+        [(ProviderKind.claudeCode, monitor.showClaude), (.codex, monitor.showCodex), (.cursor, monitor.showCursor)]
+            .filter(\.1).map(\.0)
+    }
+
+    private var menuBarRingItems: [MenuBarRings.Item] {
+        let now = Date()
+        return menuBarProviders.compactMap { provider in
+            monitor.snapshot.metric(for: provider).map { MenuBarRings.Item(metric: $0.effective(at: now), now: now) }
         }
     }
 
@@ -713,14 +736,10 @@ struct PeluMacApp: App {
     }()
 
     private var menuBarText: String {
-        let claude = monitor.snapshot.metric(for: .claudeCode)?.usedPercent
-        let codex  = monitor.snapshot.metric(for: .codex)?.usedPercent
-        let cursor = monitor.snapshot.metric(for: .cursor)?.usedPercent
-        var parts: [String] = []
-        if monitor.showClaude, let c = claude { parts.append("C \(Int(c.rounded()))%") }
-        if monitor.showCodex,  let x = codex  { parts.append("X \(Int(x.rounded()))%") }
-        if monitor.showCursor, let u = cursor { parts.append("Cu \(Int(u.rounded()))%") }
-        return parts.joined(separator: " · ")
+        menuBarProviders.compactMap { provider in
+            monitor.snapshot.metric(for: provider)?.usedPercent.map { "\(provider.menuBarLetter) \(Int($0.rounded()))%" }
+        }
+        .joined(separator: " · ")
     }
 
     private func saveToAppGroup(_ snapshot: UsageSnapshot) {
@@ -767,7 +786,7 @@ private struct MacMenuBarContent<BottomBar: View>: View {
     @State private var didTryOpenOnboarding = false
 
     var body: some View {
-        PeluMacDashboardView(snapshot: monitor.snapshot, refreshAction: { monitor.refresh() }, analysisAction: { openWindow(id: "pelu-analysis") })
+        PeluMacDashboardView(snapshot: monitor.snapshot, refreshAction: { monitor.refresh() }, analysisAction: { openFrontWindow(id: "pelu-analysis") })
             .frame(width: 392)
             .overlay(alignment: .bottomTrailing) {
                 bottomBar()
@@ -792,8 +811,14 @@ private struct MacMenuBarContent<BottomBar: View>: View {
                 // apps, so we trigger the onboarding window from here once.
                 guard !didTryOpenOnboarding, !onboardingCompleted else { return }
                 didTryOpenOnboarding = true
-                openWindow(id: PeluMacApp.onboardingWindowID)
+                openFrontWindow(id: PeluMacApp.onboardingWindowID)
             }
+    }
+
+    private func openFrontWindow(id: String) {
+        openWindow(id: id)
+        // LSUIElement agent: a new window won't take keyboard focus by itself.
+        NSApp.activate()
     }
 }
 
@@ -880,6 +905,7 @@ private struct MacBottomBar: View {
     var body: some View {
         Button {
             openWindow(id: PeluMacApp.settingsWindowID)
+            NSApp.activate()
         } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 12, weight: .medium))

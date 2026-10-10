@@ -164,6 +164,14 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
         )
     }
 
+    /// Share of the primary window already elapsed, or nil when the window
+    /// has no future reset to measure against.
+    public func primaryWindowElapsed(at now: Date = Date()) -> Double? {
+        guard let resetDate, resetDate > now, resolvedPrimaryWindowDurationMins > 0 else { return nil }
+        let duration = Double(resolvedPrimaryWindowDurationMins) * 60
+        return min(1, max(0, 1 - resetDate.timeIntervalSince(now) / duration))
+    }
+
     public var sharesResetDate: Bool {
         resetDate != nil && resetDate == weeklyResetDate
     }
