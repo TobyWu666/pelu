@@ -264,11 +264,17 @@ final class UsageMonitor: @unchecked Sendable {
     var showCodex: Bool {
         didSet { UserDefaults.standard.set(showCodex, forKey: "pelu.menubar.showCodex") }
     }
+    var showCursor: Bool {
+        didSet { UserDefaults.standard.set(showCursor, forKey: "pelu.menubar.showCursor") }
+    }
 
     private let claudeFilePath: URL
     private let claudeParser = ClaudeCodeParser()
     /// Primary Claude source; the statusLine hook only fires in terminal sessions.
     private let claudeUsageClient = ClaudeUsageAPIClient(
+        clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    )
+    private let cursorClient = CursorUsageClient(
         clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     )
     private let codexReader = CodexJSONLReader()
@@ -305,6 +311,7 @@ final class UsageMonitor: @unchecked Sendable {
         let ud = UserDefaults.standard
         showClaude = ud.object(forKey: "pelu.menubar.showClaude") as? Bool ?? true
         showCodex  = ud.object(forKey: "pelu.menubar.showCodex")  as? Bool ?? false
+        showCursor = ud.object(forKey: "pelu.menubar.showCursor") as? Bool ?? false
 
         claudeFilePath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/usag-status.json")
@@ -326,6 +333,9 @@ final class UsageMonitor: @unchecked Sendable {
         }
         codexQuotaProvider.start()
         claudeUsageClient.onUpdate = { [weak self] in
+            self?.refresh()
+        }
+        cursorClient.onUpdate = { [weak self] in
             self?.refresh()
         }
 
@@ -401,10 +411,15 @@ final class UsageMonitor: @unchecked Sendable {
             let codexTokens = self.codexReader.summedTokenUsage()
             let codexMetricWithTokens = codexMetric.attachingTokenUsage(codexTokens)
 
+            var metrics = [claudeMetric, codexMetricWithTokens]
+            if self.cursorClient.isAvailable {
+                self.cursorClient.refreshIfDue()
+                metrics.append(self.cursorClient.currentMetric())
+            }
             let snap = UsageSnapshot(
                 generatedAt: Date(),
                 source: .local,
-                metrics: [claudeMetric, codexMetricWithTokens]
+                metrics: metrics
             )
             let isFirstLoad = self.recordedHistory == nil
             var history = self.recordedHistory ?? (try? self.historyStore.load()) ?? MacUsageHistory()
@@ -700,9 +715,11 @@ struct PeluMacApp: App {
     private var menuBarText: String {
         let claude = monitor.snapshot.metric(for: .claudeCode)?.usedPercent
         let codex  = monitor.snapshot.metric(for: .codex)?.usedPercent
+        let cursor = monitor.snapshot.metric(for: .cursor)?.usedPercent
         var parts: [String] = []
         if monitor.showClaude, let c = claude { parts.append("C \(Int(c.rounded()))%") }
         if monitor.showCodex,  let x = codex  { parts.append("X \(Int(x.rounded()))%") }
+        if monitor.showCursor, let u = cursor { parts.append("Cu \(Int(u.rounded()))%") }
         return parts.joined(separator: " · ")
     }
 
@@ -719,10 +736,18 @@ struct PeluMacApp: App {
     }
 
     private func uploadSnapshotToCloud(_ snapshot: UsageSnapshot) {
+        // A Cursor placeholder would win the iPhone's newest-reading pick
+        // over another Mac's real one, so only measured readings leave.
+        let uploaded = UsageSnapshot(
+            id: snapshot.id,
+            generatedAt: snapshot.generatedAt,
+            source: snapshot.source,
+            metrics: snapshot.metrics.filter { $0.provider != .cursor || $0.measuredAt != nil }
+        )
         let mac = MacSnapshot(
             macId: MacIdentity.macId(),
             label: MacIdentity.label(),
-            snapshot: snapshot
+            snapshot: uploaded
         )
         Task {
             await uploader.submit(mac)

@@ -174,7 +174,7 @@ enum LocalUsageNotifier {
                 identifier: "lowquota-\(metric.provider.rawValue)",
                 content: notificationContent(
                     title: "額度即將用完",
-                    body: "\(metric.provider.displayName) \(UsageMetric.windowLabel(durationMins: metric.resolvedPrimaryWindowDurationMins))額度剩餘低於 10%。"
+                    body: "\(metric.provider.displayName) \(metric.windowTitle(secondary: false))額度剩餘低於 10%。"
                 ),
                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
             )
@@ -199,9 +199,12 @@ enum LocalUsageNotifier {
         let now = Date()
         guard let display = aggregate.displaySnapshot(at: now) else { return }
         for metric in display.metrics {
+            // Cursor's pools end together with the billing cycle: one reminder.
+            let sharedCycle = metric.provider == .cursor && metric.sharesResetDate
             await scheduleReset(
                 provider: metric.provider,
                 slot: "primary",
+                label: sharedCycle ? "本期" : metric.windowTitle(secondary: false),
                 resetDate: metric.resetDate,
                 durationMins: metric.resolvedPrimaryWindowDurationMins,
                 shortTermEnabled: fiveHourEnabled,
@@ -209,9 +212,11 @@ enum LocalUsageNotifier {
                 center: center,
                 now: now
             )
+            guard !sharedCycle else { continue }
             await scheduleReset(
                 provider: metric.provider,
                 slot: "secondary",
+                label: metric.windowTitle(secondary: true),
                 resetDate: metric.weeklyResetDate,
                 durationMins: metric.resolvedSecondaryWindowDurationMins,
                 shortTermEnabled: fiveHourEnabled,
@@ -225,6 +230,7 @@ enum LocalUsageNotifier {
     private static func scheduleReset(
         provider: ProviderKind,
         slot: String,
+        label: String,
         resetDate: Date?,
         durationMins: Int,
         shortTermEnabled: Bool,
@@ -237,7 +243,6 @@ enum LocalUsageNotifier {
         guard isWeekly ? weeklyEnabled : shortTermEnabled else { return }
 
         let prefix = isWeekly ? "weeklyreset" : "reset"
-        let label = UsageMetric.windowLabel(durationMins: durationMins)
         let request = UNNotificationRequest(
             identifier: "\(prefix)-\(provider.rawValue)-\(slot)",
             content: notificationContent(

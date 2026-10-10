@@ -85,7 +85,7 @@ struct PeluSettingsScreen: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Pelu")
                         .font(.headline)
-                    Text("Usage signal for Claude Code and Codex")
+                    Text("Usage signal for Claude Code, Codex and Cursor")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

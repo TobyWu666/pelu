@@ -3,7 +3,7 @@ import Foundation
 
 /// Translates between our domain model (`MacSnapshot`) and CloudKit's `CKRecord`.
 ///
-/// Schema policy (see pelu-plan.md §5):
+/// Schema policy (see AGENTS.md §4–5):
 /// - Fields are **only added, never removed** — old readers ignore unknown fields.
 /// - `schemaVersion` lets us route to the correct decoder when format changes.
 /// - `payload` carries the `[UsageMetric]` array as JSON `Data`, so internal model
@@ -27,6 +27,8 @@ public enum MacSnapshotRecord {
         case bundleVersion
         case generatedAt
         case payload
+        /// Metrics for providers that `payload` can't carry; see `ProviderKind.fitsLegacyPayload`.
+        case extraMetrics
     }
 
     public enum DecodeError: Error {
@@ -43,10 +45,13 @@ public enum MacSnapshotRecord {
 
     /// Build a CKRecord for upload. If `existing` is provided (from a prior fetch), we
     /// preserve its `recordChangeTag` so CloudKit's optimistic locking can detect races.
+    /// `includeExtraMetrics: false` writes only what pre-`extraMetrics` schemas
+    /// accept, for when the Production schema hasn't been deployed yet.
     public static func makeRecord(
         from mac: MacSnapshot,
         bundleVersion: String,
-        existing: CKRecord? = nil
+        existing: CKRecord? = nil,
+        includeExtraMetrics: Bool = true
     ) throws -> CKRecord {
         let record = existing ?? CKRecord(
             recordType: recordType,
@@ -59,10 +64,20 @@ public enum MacSnapshotRecord {
         record[Field.bundleVersion.rawValue] = bundleVersion as NSString
         record[Field.generatedAt.rawValue] = mac.snapshot.generatedAt as NSDate
 
-        let payload = try JSONEncoder.peluAPI.encode(mac.snapshot.metrics)
-        record[Field.payload.rawValue] = payload as NSData
+        let legacy = mac.snapshot.metrics.filter { $0.provider.fitsLegacyPayload }
+        let extra = mac.snapshot.metrics.filter { !$0.provider.fitsLegacyPayload }
+        record[Field.payload.rawValue] = try JSONEncoder.peluAPI.encode(legacy) as NSData
+        if includeExtraMetrics, !extra.isEmpty {
+            record[Field.extraMetrics.rawValue] = try JSONEncoder.peluAPI.encode(extra) as NSData
+        } else if record[Field.extraMetrics.rawValue] != nil {
+            record[Field.extraMetrics.rawValue] = nil
+        }
 
         return record
+    }
+
+    public static func hasExtraMetrics(_ mac: MacSnapshot) -> Bool {
+        mac.snapshot.metrics.contains { !$0.provider.fitsLegacyPayload }
     }
 
     /// Decode a CKRecord into a MacSnapshot. Tolerant of missing optional fields,
@@ -88,11 +103,15 @@ public enum MacSnapshotRecord {
             throw DecodeError.unsupportedSchemaVersion(writtenVersion)
         }
 
-        let metrics: [UsageMetric]
+        var metrics: [UsageMetric]
         do {
-            metrics = try JSONDecoder.peluAPI.decode([UsageMetric].self, from: payload)
+            metrics = try JSONDecoder.peluAPI.decode(LossyMetrics.self, from: payload).metrics
         } catch {
             throw DecodeError.payloadDecodeFailed(underlying: error)
+        }
+        if let extra = record[Field.extraMetrics.rawValue] as? Data,
+           let decoded = try? JSONDecoder.peluAPI.decode(LossyMetrics.self, from: extra) {
+            metrics += decoded.metrics.filter { metric in !metrics.contains { $0.provider == metric.provider } }
         }
 
         let snapshot = UsageSnapshot(
@@ -102,4 +121,25 @@ public enum MacSnapshotRecord {
         )
         return MacSnapshot(macId: macId, label: label, snapshot: snapshot)
     }
+}
+
+/// Skips metrics this build can't decode (e.g. a provider added by a newer
+/// Mac) instead of failing the whole record.
+struct LossyMetrics: Decodable {
+    let metrics: [UsageMetric]
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var metrics: [UsageMetric] = []
+        while !container.isAtEnd {
+            if let metric = try? container.decode(UsageMetric.self) {
+                metrics.append(metric)
+            } else if (try? container.decode(Skipped.self)) == nil {
+                break
+            }
+        }
+        self.metrics = metrics
+    }
+
+    private struct Skipped: Decodable {}
 }

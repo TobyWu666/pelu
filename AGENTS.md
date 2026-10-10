@@ -51,9 +51,12 @@ repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesi
 - **Claude Code**：主來源 `GET https://api.anthropic.com/api/oauth/usage`（`ClaudeUsageAPIClient` / `ClaudeUsageAPIParser`，Claude Code `/usage` 用的非公開端點），token 讀 Keychain `Claude Code-credentials`，涵蓋終端機、IDE、桌面版、claude.ai 的用量。**不要自己 refresh token**（refresh token 會輪替，可能把 Claude Code 登出）；過期就等 Claude Code 下次執行。端點限流很兇（30–60 秒輪詢會卡 429 數小時，連 Claude Code 的 `/usage` 一起壞），所以 `~/.claude/projects/*/*.jsonl` 有新活動才 5 分鐘一次、沒有則 15 分鐘一次（本地 2–8 點兩者 ×2），失敗退避 5→15→30→60 分鐘；不要調快，也不要偽裝成 claude-code 的 User-Agent。此做法在 Anthropic 條款上屬灰色地帶（文件禁止第三方蒐集／中介 Claude.ai token），改動前先問使用者。資料過期門檻統一用 `UsageMetric.staleAfter`。備援是 statusLine hook（`~/.claude/usag-statusline.py`，寫入 `~/.claude/settings.json`），輸出 `~/.claude/usag-status.json`（檔名就是 `usag`，不是錯字）→ `ClaudeCodeParser`；hook 只在終端機 session 執行，IDE 擴充套件不會觸發。兩者取 `measuredAt` 較新者，context / cost 只有 hook 有。
 - **ChatGPT.app**（原 Codex.app，bundle id 仍是 `com.openai.codex`）的 codex 在 `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。
 - **Codex**：主來源 `codex app-server` JSON-RPC `account/rateLimits/read`（`CodexAppServerClient` / `CodexQuotaProvider`，`dataSource = officialQuota`）；備援掃 `~/.codex/sessions/**/*.jsonl`（`localEstimate`）。binary 依序找 ChatGPT.app / Codex.app 內附、NSWorkspace、常見 CLI 路徑。
+- **Cursor**：`GET https://cursor.com/api/usage-summary`（cursor.com/dashboard 前端用的非公開端點，`CursorUsageClient` / `CursorUsageParser`），用 Cursor app 存在 `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`（SQLite `ItemTable`，key `cursorAuth/accessToken`）的 session JWT，組成 cookie `WorkosCursorSessionToken=<sub 去掉 "provider|" 前綴>::<jwt>`（URL-encode）。Bearer header 會 401。**不要 refresh / 寫回 token**。Cursor 正在寫 state 時 5 分鐘、否則 15 分鐘（同樣有凌晨 ×2），失敗退避 5→15→30→60 分鐘。用量是一個帳單週期內的兩個額度：primary = `apiPercentUsed`（指定模型 / API），secondary = `autoPercentUsed`（Auto + Composer），兩者 reset 都是 `billingCycleEnd`，status 取兩者較高。UI 文字用 `UsageMetric.windowTitle(secondary:)`（Cursor 顯示 API / Auto，其他顯示視窗長度）。沒裝 Cursor 就不產生 metric；尚未量到的 placeholder 不上傳 CloudKit。灰色地帶程度同 Claude，改動前先問使用者。
 - **配額視窗長度由 provider 決定**，不要寫死 5h / 7d。`UsageMetric.usedPercent` / `weeklyPercent` 是歷史命名，語意是 primary / secondary window。
 - **CloudKit**：record type `MacSnapshot`，record name `mac-{macId}`，container 一律用 `MacSnapshotRecord.containerIdentifier`（**不要用 `CKContainer.default()`**）。上傳要序列化／合併，避免 `Server Record Changed` 衝突。PeluMac 固定走 Production 環境；iOS Debug 走 Development。
-- **多 Mac 聚合**（`AggregateSnapshot.displaySnapshot`）：Claude 取最高用量；Codex quota 是帳號層級，取**最新**一筆量測而不是最高值。
+- **`payload` 只放 Claude / Codex**（`ProviderKind.fitsLegacyPayload`）：iOS ≤ 1.1 把 `payload` 當嚴格的 `[UsageMetric]` 解碼，多一個未知 provider 就整台 Mac 消失。其他 provider（目前是 Cursor）放 `extraMetrics`（Bytes，同格式 JSON）。新版 reader 對兩個欄位都逐筆容錯（`LossyMetrics`）。Production schema 沒有 `extraMetrics` 時存檔會被拒，`CloudKitSyncer` 會改成不帶 extras 重送並暫停一小時。**新增欄位要先在 CloudKit Console 的 Development 加好並 Deploy Schema Changes 到 Production**，再發 PeluMac。
+- **多 Mac 聚合**（`AggregateSnapshot.displaySnapshot`）：Claude 取最高用量；Codex / Cursor quota 是帳號層級，取**最新**一筆量測而不是最高值。
+- **Mac 面板**：顯示多個服務時，上方一排 tile（各自 primary % + secondary 小字），點選的服務在下方顯示完整雙環／橫條卡片（`pelu.mac.selectedProvider`）；`pelu.mac.panelProviders` 是逗號分隔的 provider rawValue，仍相容舊值 `all` / `claude` / `codex`。iOS 中型 widget 只放前兩個 provider，Live Activity 只有 Claude / Codex。
 - iPhone 端：`CKQuerySubscription` + silent push 觸發更新；App Group `group.org.tobywu.pelu` 給 Widget 讀。
 
 ## 5. 不可破壞的契約
@@ -62,7 +65,7 @@ repo 在 iCloud Drive，build 產物會被加上 `com.apple.FinderInfo`，codesi
 SUFeedURL         https://pelu.wutoby.com/appcast.xml
 SUPublicEDKey     pBmFC7cROkIY05Xzcu6tAQipN2iUzz2HUdlhN3rf5qg=   （1.0.11 起；≤1.0.10 是 3BXIeW0MQHP3rPFeLEEO5kL4R6z0JGUau2975UX8GoE=，私鑰已遺失）
 DMG asset name    PeluMac.dmg
-CloudKit          iCloud.org.tobywu.pelu（record type MacSnapshot，schema v1）
+CloudKit          iCloud.org.tobywu.pelu（record type MacSnapshot，schema v1；欄位 macId / label / schemaVersion / bundleVersion / generatedAt / payload / extraMetrics）
 App Group         group.org.tobywu.pelu
 Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 ```
@@ -75,7 +78,7 @@ Bundle IDs        org.tobywu.pelu / org.tobywu.pelu.widget / org.tobywu.pelu.mac
 
 ## 6. 發版
 
-**目前線上**：PeluMac `1.0.11`（build 12，2026-10-09），下一版 build ≥ 13；iOS `1.0`（build 2，READY_FOR_SALE），下一版 build ≥ 4（`1.1` build 3 於 2026-10-08 送審，WAITING_FOR_REVIEW，核准後自動上架）。iOS 走 Xcode Archive → App Store Connect。
+**目前線上**：PeluMac `1.0.11`（build 12，2026-10-09），下一版 build ≥ 13；iOS `1.1`（build 3，READY_FOR_SALE），下一版 build ≥ 4。iOS 走 Xcode Archive → App Store Connect。
 
 iOS 版號用命令列帶入（`MARKETING_VERSION=… CURRENT_PROJECT_VERSION=…`），pbxproj 不動。`xcodebuild archive` / `-exportArchive`（ExportOptions `method=app-store-connect`、`destination=upload`）都加 `-allowProvisioningUpdates`，但**不要帶 `-authenticationKey*`**：那把 API key 沒有 cloud-managed distribution certificate 權限，會匯出失敗；不帶就改用 Xcode 裡登入的帳號雲端簽章，可以直接上傳。build、archive 路徑放在 iCloud 外。
 

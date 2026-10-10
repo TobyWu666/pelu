@@ -3,26 +3,54 @@ import AppKit
 import PeluCore
 import SwiftUI
 
-/// A single saved selection makes an empty panel impossible.
-public enum MacPanelProviders: String {
-    case all, claude, codex
+/// Providers shown in the menu-bar panel; never empty. Stored as
+/// comma-separated raw values, and still reads the old "all" / "claude" /
+/// "codex" values saved before Cursor existed.
+public struct MacPanelProviders: RawRepresentable, Equatable, Sendable {
+    public private(set) var providers: Set<ProviderKind>
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "all": providers = Set(ProviderKind.allCases)
+        case "claude": providers = [.claudeCode]
+        case "codex": providers = [.codex]
+        default: providers = Set(rawValue.split(separator: ",").compactMap { ProviderKind(rawValue: String($0)) })
+        }
+        if providers.isEmpty { providers = Set(ProviderKind.allCases) }
+    }
+
+    public var rawValue: String {
+        ProviderKind.allCases.filter(providers.contains).map(\.rawValue).joined(separator: ",")
+    }
+
+    public static let all = MacPanelProviders(rawValue: "all")
 
     public func includes(_ provider: ProviderKind) -> Bool {
-        self == .all || (provider == .claudeCode ? self == .claude : self == .codex)
+        providers.contains(provider)
+    }
+
+    public func isLastVisible(_ provider: ProviderKind) -> Bool {
+        providers == [provider]
     }
 
     public func setting(_ provider: ProviderKind, visible: Bool) -> Self {
+        var copy = self
         if visible {
-            return includes(provider) ? self : .all
+            copy.providers.insert(provider)
+        } else if !isLastVisible(provider) {
+            copy.providers.remove(provider)
         }
-        guard self == .all else { return self }
-        return provider == .claudeCode ? .codex : .claude
+        return copy
     }
 }
 
-/// Compact native menu-bar surface. History belongs in a separate, larger view.
+/// Compact native menu-bar surface. With several providers, a strip of
+/// tiles keeps every headline number in view and the selected provider gets
+/// the full card, so adding a provider doesn't add a card's worth of height.
+/// History belongs in a separate, larger view.
 public struct PeluMacDashboardView: View {
     @AppStorage("pelu.mac.panelProviders") private var panelProviders = MacPanelProviders.all
+    @AppStorage("pelu.mac.selectedProvider") private var selectedProvider = ProviderKind.claudeCode
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     private let snapshot: UsageSnapshot
@@ -37,13 +65,21 @@ public struct PeluMacDashboardView: View {
 
     public var body: some View {
         TimelineView(.periodic(from: Date(), by: 60)) { context in
-            VStack(alignment: .leading, spacing: 18) {
+            let metrics = visibleMetrics.map { $0.effective(at: context.date) }
+            let selected = metrics.first { $0.provider == selectedProvider } ?? metrics[0]
+            VStack(alignment: .leading, spacing: 14) {
                 header
-                VStack(spacing: 12) {
-                    ForEach(visibleMetrics) { metric in
-                        MacQuotaCard(metric: metric.effective(at: context.date), now: context.date)
+                if metrics.count > 1 {
+                    HStack(spacing: 8) {
+                        ForEach(metrics) { metric in
+                            MacProviderTile(metric: metric, isSelected: metric.provider == selected.provider) {
+                                selectedProvider = metric.provider
+                            }
+                        }
                     }
                 }
+                MacQuotaCard(metric: selected, now: context.date)
+                    .id(selected.provider)
                 if let analysisAction {
                     Button(action: analysisAction) {
                         HStack {
@@ -85,10 +121,18 @@ public struct PeluMacDashboardView: View {
         }
     }
 
+    /// Cursor only appears once the Mac has found a Cursor install; Claude and
+    /// Codex keep a placeholder so a missing source reads as "no data".
     private var visibleMetrics: [UsageMetric] {
-        [ProviderKind.claudeCode, .codex]
+        let metrics = ProviderKind.allCases
             .filter { panelProviders.includes($0) }
-            .map { snapshot.metric(for: $0) ?? UsageMetric(provider: $0, usedPercent: nil, note: "尚無使用資料") }
+            .compactMap { provider -> UsageMetric? in
+                if let metric = snapshot.metric(for: provider) { return metric }
+                return provider.fitsLegacyPayload ? UsageMetric(provider: provider, usedPercent: nil, note: "尚無使用資料") : nil
+            }
+        return metrics.isEmpty
+            ? [snapshot.metrics.first ?? UsageMetric(provider: .claudeCode, usedPercent: nil, note: "尚無使用資料")]
+            : metrics
     }
 
     private var header: some View {
@@ -114,6 +158,81 @@ public struct PeluMacDashboardView: View {
             .accessibilityLabel("重新整理用量")
             .help("重新整理用量")
         }
+    }
+}
+
+/// One provider's headline in the selector strip: primary window large, the
+/// secondary window as a footnote so a nearly spent weekly or Auto pool is
+/// still visible while another provider is selected.
+private struct MacProviderTile: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var isHovered = false
+    let metric: UsageMetric
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Image(metric.provider.assetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                    Text(metric.provider.shortName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Circle().fill(metric.status.tintColor).frame(width: 5, height: 5)
+                }
+                Text(PercentFormatter.string(from: metric.usedPercent))
+                    .font(.system(size: 21, weight: .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                MacQuotaGauge(percent: metric.usedPercent, elapsed: nil, height: 4, markerRoom: 0)
+                Text(footnote)
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(fill)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(isSelected ? PeluTheme.brandTeal(for: colorScheme).opacity(0.7) : stroke, lineWidth: isSelected ? 1 : 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel(metric.provider.displayName)
+        .accessibilityValue("\(metric.windowTitle(secondary: false)) 已用 \(PercentFormatter.string(from: metric.usedPercent))，\(footnote)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var footnote: String {
+        if let weekly = metric.weeklyPercent {
+            return "\(metric.windowTitle(secondary: true, compact: true)) \(PercentFormatter.string(from: weekly))"
+        }
+        return metric.usedPercent == nil ? "尚無資料" : metric.windowTitle(secondary: false, compact: true)
+    }
+
+    private var fill: Color {
+        if reduceTransparency { return Color(nsColor: .controlBackgroundColor) }
+        let base = colorScheme == .dark ? 0.055 : 0.32
+        return Color.white.opacity(isSelected || isHovered ? base * 1.6 : base)
+    }
+
+    private var stroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.09) : Color.white.opacity(0.5)
     }
 }
 
@@ -144,6 +263,7 @@ private struct MacQuotaCard: View {
 
             if displayStyle == "bars" {
                 quotaRow(
+                    title: metric.windowTitle(secondary: false),
                     percent: metric.usedPercent,
                     duration: metric.resolvedPrimaryWindowDurationMins,
                     reset: metric.resetDate,
@@ -153,17 +273,27 @@ private struct MacQuotaCard: View {
                 if metric.weeklyPercent != nil {
                     Divider().opacity(0.5)
                     quotaRow(
+                        title: metric.windowTitle(secondary: true),
                         percent: metric.weeklyPercent,
                         duration: metric.resolvedSecondaryWindowDurationMins,
                         reset: metric.weeklyResetDate,
-                        prominent: false
+                        prominent: false,
+                        showsReset: !metric.sharesResetDate
                     )
                 }
             } else {
-                HStack(alignment: .top, spacing: 16) {
-                    ringColumn(percent: metric.usedPercent, duration: metric.resolvedPrimaryWindowDurationMins, reset: metric.resetDate)
-                    if metric.weeklyPercent != nil {
-                        ringColumn(percent: metric.weeklyPercent, duration: metric.resolvedSecondaryWindowDurationMins, reset: metric.weeklyResetDate)
+                let sharedReset = metric.sharesResetDate && metric.weeklyPercent != nil
+                VStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ringColumn(title: metric.windowTitle(secondary: false), percent: metric.usedPercent, duration: metric.resolvedPrimaryWindowDurationMins, reset: metric.resetDate, showsReset: !sharedReset)
+                        if metric.weeklyPercent != nil {
+                            ringColumn(title: metric.windowTitle(secondary: true), percent: metric.weeklyPercent, duration: metric.resolvedSecondaryWindowDurationMins, reset: metric.weeklyResetDate, showsReset: !sharedReset)
+                        }
+                    }
+                    if sharedReset, let reset = metric.resetDate {
+                        Text(ResetTimeFormatter.string(from: reset, now: now))
+                            .font(.system(size: 10).monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -210,26 +340,28 @@ private struct MacQuotaCard: View {
         }
     }
 
-    private func ringColumn(percent: Double?, duration: Int, reset: Date?) -> some View {
+    private func ringColumn(title: String, percent: Double?, duration: Int, reset: Date?, showsReset: Bool) -> some View {
         let progress = elapsed(reset: reset, duration: duration)
         return VStack(spacing: 9) {
-            Text(UsageMetric.windowLabel(durationMins: duration))
+            Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
             MacQuotaRings(percent: percent, elapsed: progress)
                 .frame(width: 114, height: 114)
                 .padding(.vertical, 3)
-            Text(reset.map { ResetTimeFormatter.string(from: $0, now: now) } ?? "重置時間未定")
-                .font(.system(size: 10).monospacedDigit())
-                .foregroundStyle(.secondary)
+            if showsReset {
+                Text(reset.map { ResetTimeFormatter.string(from: $0, now: now) } ?? "重置時間未定")
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func quotaRow(percent: Double?, duration: Int, reset: Date?, prominent: Bool) -> some View {
+    private func quotaRow(title: String, percent: Double?, duration: Int, reset: Date?, prominent: Bool, showsReset: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
-                Text(UsageMetric.windowLabel(durationMins: duration))
+                Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -245,7 +377,9 @@ private struct MacQuotaCard: View {
             HStack {
                 Text(percent.map { "剩餘 \(PercentFormatter.string(from: max(0, 100 - $0)))" } ?? "尚無資料")
                 Spacer()
-                Text(reset.map { ResetTimeFormatter.string(from: $0, now: now) } ?? "重置時間未定")
+                if showsReset {
+                    Text(reset.map { ResetTimeFormatter.string(from: $0, now: now) } ?? "重置時間未定")
+                }
             }
             .font(.system(size: 10).monospacedDigit())
             .foregroundStyle(.secondary)
@@ -303,6 +437,9 @@ private struct MacQuotaGauge: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let percent: Double?
     let elapsed: Double?
+    var height: CGFloat = 7
+    /// Vertical room for the elapsed marker, reserved even without one so the row doesn't jump.
+    var markerRoom: CGFloat = 6
 
     var body: some View {
         GeometryReader { geometry in
@@ -316,14 +453,14 @@ private struct MacQuotaGauge: View {
                 if let elapsed {
                     Capsule()
                         .fill(.primary.opacity(0.8))
-                        .frame(width: 2, height: 13)
+                        .frame(width: 2, height: height + 6)
                         .offset(x: min(max(0, geometry.size.width * elapsed - 1), max(0, geometry.size.width - 2)))
                 }
             }
-            .frame(height: 7)
+            .frame(height: height)
             .frame(maxHeight: .infinity)
         }
-        .frame(height: 13)
+        .frame(height: height + markerRoom)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: percent)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("配額用量")
@@ -370,5 +507,20 @@ private struct MenuBarGlass: NSViewRepresentable {
     PeluMacDashboardView(snapshot: .demo(), refreshAction: {})
         .frame(width: 392)
         .preferredColorScheme(.dark)
+}
+
+#Preview("With Cursor") {
+    let now = Date()
+    let demo = UsageSnapshot.demo(now: now)
+    let cycleEnd = now.addingTimeInterval(29 * 86400)
+    PeluMacDashboardView(snapshot: UsageSnapshot(generatedAt: now, source: .local, metrics: demo.metrics + [
+        UsageMetric(
+            provider: .cursor, usedPercent: 10, weeklyPercent: 1,
+            primaryWindowDurationMins: 31 * 1440, secondaryWindowDurationMins: 31 * 1440,
+            resetDate: cycleEnd, weeklyResetDate: cycleEnd,
+            dataSource: .officialQuota, measuredAt: now
+        ),
+    ]), refreshAction: {}, analysisAction: {})
+    .frame(width: 392)
 }
 #endif

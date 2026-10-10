@@ -124,6 +124,7 @@ private extension ProviderKind {
         switch self {
         case .claudeCode: "Claude"
         case .codex:      "Codex"
+        case .cursor:     "Cursor"
         }
     }
 }
@@ -197,8 +198,9 @@ private struct MediumWidgetView: View {
                     .foregroundStyle(.tertiary)
             }
 
+            // Two columns is all the medium family fits; provider order puts Claude / Codex first.
             HStack(spacing: 10) {
-                ForEach(snapshot.metrics) { metric in
+                ForEach(snapshot.metrics.prefix(2)) { metric in
                     MediumProviderCard(metric: metric)
                 }
             }
@@ -273,7 +275,7 @@ private struct MediumProviderCard: View {
     /// 從屬於主要視窗用量。
     private func weeklyRow(weekly: Double) -> some View {
         HStack(spacing: 6) {
-            Text(UsageMetric.windowLabel(durationMins: metric.resolvedSecondaryWindowDurationMins, compact: true))
+            Text(metric.windowTitle(secondary: true, compact: true))
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.tertiary)
             UsageBar(percent: weekly, tint: metric.status.tintColor.opacity(0.55), height: 3)

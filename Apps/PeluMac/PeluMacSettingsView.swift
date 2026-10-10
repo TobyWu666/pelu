@@ -75,16 +75,17 @@ struct PeluMacSettingsView: View {
         Section {
             panelProviderToggle("Claude Code", provider: .claudeCode)
             panelProviderToggle("Codex", provider: .codex)
+            panelProviderToggle("Cursor", provider: .cursor)
         } header: {
             Text("面板顯示服務")
         } footer: {
-            Text("至少保留一個服務。此設定控制展開面板中的用量卡片。")
+            Text("至少保留一個服務。顯示多個服務時，面板上方會列出各自用量，點選即可查看詳細配額。Cursor 需在這台 Mac 安裝並登入才會出現。")
                 .font(.caption)
         }
     }
 
     private func panelProviderToggle(_ title: String, provider: ProviderKind) -> some View {
-        let isLastVisible = panelProviders != .all && panelProviders.includes(provider)
+        let isLastVisible = panelProviders.isLastVisible(provider)
         return Toggle(title, isOn: Binding(
             get: { panelProviders.includes(provider) },
             set: { panelProviders = panelProviders.setting(provider, visible: $0) }
@@ -158,7 +159,7 @@ struct PeluMacSettingsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Pelu")
                         .font(.headline)
-                    Text("Usage signal for Claude Code and Codex")
+                    Text("Usage signal for Claude Code, Codex and Cursor")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -173,6 +174,7 @@ struct PeluMacSettingsView: View {
         Section {
             Toggle("Claude %", isOn: $monitor.showClaude)
             Toggle("Codex %", isOn: $monitor.showCodex)
+            Toggle("Cursor %", isOn: $monitor.showCursor)
         } header: {
             Text("選單列顯示")
         } footer: {

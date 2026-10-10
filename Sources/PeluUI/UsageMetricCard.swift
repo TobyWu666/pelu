@@ -172,10 +172,7 @@ struct UsageMetricCard: View {
 
                 if let weekly = metric.weeklyPercent {
                     SecondaryBar(
-                        label: UsageMetric.windowLabel(
-                            durationMins: metric.resolvedSecondaryWindowDurationMins,
-                            compact: true
-                        ),
+                        label: metric.windowTitle(secondary: true, compact: true),
                         percent: weekly,
                         colorScheme: colorScheme,
                         outerProgress: elapsedProgress(
@@ -216,11 +213,15 @@ struct UsageMetricCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    if let d = metric.resetDate {
-                        Text("\(UsageMetric.windowLabel(durationMins: metric.resolvedPrimaryWindowDurationMins)) \(ResetTimeFormatter.string(from: d, now: now))")
-                    }
-                    if let d = metric.weeklyResetDate {
-                        Text("\(UsageMetric.windowLabel(durationMins: metric.resolvedSecondaryWindowDurationMins)) \(ResetTimeFormatter.string(from: d, now: now))")
+                    if metric.sharesResetDate, let d = metric.resetDate {
+                        Text(ResetTimeFormatter.string(from: d, now: now))
+                    } else {
+                        if let d = metric.resetDate {
+                            Text("\(metric.windowTitle(secondary: false)) \(ResetTimeFormatter.string(from: d, now: now))")
+                        }
+                        if let d = metric.weeklyResetDate {
+                            Text("\(metric.windowTitle(secondary: true)) \(ResetTimeFormatter.string(from: d, now: now))")
+                        }
                     }
                     if metric.resetDate == nil && metric.weeklyResetDate == nil {
                         Text("重置時間未定")

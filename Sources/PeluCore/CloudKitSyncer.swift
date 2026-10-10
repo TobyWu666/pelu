@@ -34,11 +34,27 @@ public actor CloudKitSyncer {
     /// another writer wins between our fetch and save, fetch its new change tag
     /// and retry once with this newest local snapshot.
     public func save(_ mac: MacSnapshot) async throws {
+        let extrasPaused = extraMetricsRejectedAt.map { Date().timeIntervalSince($0) < Self.extraMetricsRetryInterval } ?? false
+        let includeExtras = MacSnapshotRecord.hasExtraMetrics(mac) && !extrasPaused
         do {
-            try await saveAttempt(mac)
+            try await saveRetryingConflict(mac, includeExtraMetrics: includeExtras)
+        } catch SyncError.ckError(let ckError) where includeExtras && Self.isSchemaRejection(ckError) {
+            // Production schema predates `extraMetrics`; keep Claude / Codex syncing.
+            extraMetricsRejectedAt = Date()
+            print("Pelu CloudKit: extraMetrics rejected (\(ckError.localizedDescription)); deploy the schema to Production")
+            try await saveRetryingConflict(mac, includeExtraMetrics: false)
+        }
+    }
+
+    private var extraMetricsRejectedAt: Date?
+    private static let extraMetricsRetryInterval: TimeInterval = 3600
+
+    private func saveRetryingConflict(_ mac: MacSnapshot, includeExtraMetrics: Bool) async throws {
+        do {
+            try await saveAttempt(mac, includeExtraMetrics: includeExtraMetrics)
         } catch let ckError as CKError where Self.isRecordConflict(ckError) {
             do {
-                try await saveAttempt(mac)
+                try await saveAttempt(mac, includeExtraMetrics: includeExtraMetrics)
             } catch {
                 throw Self.wrap(error)
             }
@@ -47,7 +63,16 @@ public actor CloudKitSyncer {
         }
     }
 
-    private func saveAttempt(_ mac: MacSnapshot) async throws {
+    private static func isSchemaRejection(_ error: CKError) -> Bool {
+        let codes: Set<CKError.Code> = [.invalidArguments, .serverRejectedRequest]
+        if codes.contains(error.code) { return true }
+        guard error.code == .partialFailure else { return false }
+        return error.partialErrorsByItemID?.values.contains {
+            ($0 as? CKError).map { codes.contains($0.code) } ?? false
+        } ?? false
+    }
+
+    private func saveAttempt(_ mac: MacSnapshot, includeExtraMetrics: Bool) async throws {
         let recordID = MacSnapshotRecord.recordID(forMacId: mac.macId)
 
         let existing: CKRecord?
@@ -62,7 +87,8 @@ public actor CloudKitSyncer {
             record = try MacSnapshotRecord.makeRecord(
                 from: mac,
                 bundleVersion: bundleVersion,
-                existing: existing
+                existing: existing,
+                includeExtraMetrics: includeExtraMetrics
             )
         } catch {
             throw SyncError.recordEncodeFailed(error)

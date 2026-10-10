@@ -39,11 +39,12 @@ public struct PeluMacAnalysisView: View {
                     }
                     Spacer()
                     Picker("服務", selection: $provider) {
-                        Text("Claude Code").tag(ProviderKind.claudeCode)
-                        Text("Codex").tag(ProviderKind.codex)
+                        ForEach(providers) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 230)
+                    .frame(width: providers.count > 2 ? 300 : 230)
                 }
                 HStack(spacing: 16) {
                     summary("目前已用", value: PercentFormatter.string(from: secondary ? metric?.weeklyPercent : metric?.usedPercent))
@@ -63,8 +64,8 @@ public struct PeluMacAnalysisView: View {
                         .frame(width: 230)
                     }
                     Picker("額度週期", selection: $secondary) {
-                        Text("主要週期" + (metric.map { " · " + UsageMetric.windowLabel(durationMins: $0.resolvedPrimaryWindowDurationMins) } ?? "")).tag(false)
-                        Text("次要週期" + (metric.map { " · " + UsageMetric.windowLabel(durationMins: $0.resolvedSecondaryWindowDurationMins) } ?? "")).tag(true)
+                        Text(windowPickerLabel(metric, secondary: false)).tag(false)
+                        Text(windowPickerLabel(metric, secondary: true)).tag(true)
                     }
                     .pickerStyle(.segmented)
                     if points.isEmpty {
@@ -134,6 +135,19 @@ public struct PeluMacAnalysisView: View {
                 .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
                 if provider == .codex {
                     tokenPanel(metric?.tokenUsage)
+                } else if provider == .cursor {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("帳單週期").font(.headline)
+                        if let reset = metric?.resetDate {
+                            let start = reset.addingTimeInterval(-Double(metric?.resolvedPrimaryWindowDurationMins ?? 0) * 60)
+                            LabeledContent("本期", value: "\(start.formatted(date: .abbreviated, time: .omitted)) – \(reset.formatted(date: .abbreviated, time: .omitted))")
+                        }
+                        Text("Cursor 的方案用量分成兩個額度：API 用於指定模型，Auto 涵蓋 Auto 與 Composer。兩者各自計算，都在帳單週期結束時重置。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("工作階段").font(.headline)
@@ -150,6 +164,17 @@ public struct PeluMacAnalysisView: View {
         .onChange(of: provider) { _, _ in selectedDate = nil }
         .onChange(of: days) { _, _ in selectedDate = nil }
         .onChange(of: secondary) { _, _ in selectedDate = nil }
+    }
+
+    private var providers: [ProviderKind] {
+        ProviderKind.allCases.filter { $0.fitsLegacyPayload || snapshot.metric(for: $0) != nil || $0 == provider }
+    }
+
+    private func windowPickerLabel(_ metric: UsageMetric?, secondary: Bool) -> String {
+        let name = secondary ? "次要週期" : "主要週期"
+        guard let metric else { return name }
+        if metric.provider == .cursor { return metric.windowTitle(secondary: secondary) + " 額度" }
+        return name + " · " + metric.windowTitle(secondary: secondary)
     }
 
     private func summary(_ title: String, value: String) -> some View {

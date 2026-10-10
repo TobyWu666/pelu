@@ -101,6 +101,9 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             return self
         }
 
+        let status: UsageStatus? = provider == .cursor
+            ? UsageStatus.from(percent: [resolvedPrimary, resolvedWeekly].compactMap { $0 }.max())
+            : nil
         return UsageMetric(
             provider: provider,
             usedPercent: resolvedPrimary,
@@ -111,6 +114,7 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
             costTodayUSD: costTodayUSD,
             resetDate: resetDate,
             weeklyResetDate: weeklyResetDate,
+            status: status,
             note: note,
             dataSource: dataSource,
             measuredAt: measuredAt,
@@ -148,6 +152,20 @@ public struct UsageMetric: Codable, Equatable, Sendable, Identifiable {
 
     public var resolvedSecondaryWindowDurationMins: Int {
         secondaryWindowDurationMins ?? 7 * 24 * 60
+    }
+
+    /// Cursor's two windows are separate quota pools over the same billing
+    /// cycle, so they are named by pool rather than by duration.
+    public func windowTitle(secondary: Bool, compact: Bool = false) -> String {
+        if provider == .cursor { return secondary ? "Auto" : "API" }
+        return Self.windowLabel(
+            durationMins: secondary ? resolvedSecondaryWindowDurationMins : resolvedPrimaryWindowDurationMins,
+            compact: compact
+        )
+    }
+
+    public var sharesResetDate: Bool {
+        resetDate != nil && resetDate == weeklyResetDate
     }
 
     public static func windowLabel(durationMins: Int, compact: Bool = false) -> String {

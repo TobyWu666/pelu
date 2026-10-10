@@ -164,6 +164,8 @@ public final class ClaudeUsageAPIClient: @unchecked Sendable {
     /// once the idle interval has; both stretch during quiet hours.
     static func isDue(
         now: Date, nextAttemptAt: Date, lastAttemptAt: Date?, lastActivityAt: Date?,
+        activeInterval: TimeInterval = ClaudeUsageAPIClient.activeInterval,
+        idleInterval: TimeInterval = ClaudeUsageAPIClient.idleInterval,
         calendar: Calendar = .current
     ) -> Bool {
         guard now >= nextAttemptAt else { return false }

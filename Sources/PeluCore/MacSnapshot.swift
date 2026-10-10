@@ -35,9 +35,9 @@ public struct AggregateSnapshot: Codable, Equatable, Sendable {
     }
 
     /// Composite snapshot for Dashboard, Widget, and Live Activity. Claude
-    /// retains the conservative highest-usage behavior. Codex quota from the
-    /// app-server is account-wide, so choosing an older higher number leaves
-    /// the UI stuck above a later reset; choose its newest measurement instead.
+    /// retains the conservative highest-usage behavior. Codex and Cursor quota
+    /// is account-wide, so choosing an older higher number leaves the UI stuck
+    /// above a later reset; choose the newest measurement instead.
     public var displaySnapshot: UsageSnapshot? {
         displaySnapshot(at: Date())
     }
@@ -56,7 +56,7 @@ public struct AggregateSnapshot: Codable, Equatable, Sendable {
                     return (metric.effective(at: now), mac.snapshot.generatedAt, mac.snapshot.source)
                 }
             let winner: (metric: UsageMetric, generatedAt: Date, source: ConnectionSource)?
-            if provider == .codex {
+            if provider == .codex || provider == .cursor {
                 winner = candidates.max(by: {
                     let left = $0.metric.measuredAt ?? $0.generatedAt
                     let right = $1.metric.measuredAt ?? $1.generatedAt
