@@ -9,6 +9,7 @@ struct PeluSettingsScreen: View {
     @AppStorage("pelu.notify.lowQuota") private var lowQuotaEnabled = false
     @AppStorage("pelu.notify.reset") private var resetEnabled = false
     @AppStorage("pelu.notify.weeklyReset") private var weeklyResetEnabled = false
+    @AppStorage(UsageCardStyle.storageKey) private var cardStyle: UsageCardStyle = .bars
 
     @StateObject private var notifications = NotificationManager.shared
     @State private var permissionDeniedAlert = false
@@ -36,6 +37,7 @@ struct PeluSettingsScreen: View {
                 brandSection
                 iCloudSection
                 devicesSection
+                displaySection
                 notificationsSection
                 liveActivitySection
                 resourcesSection
@@ -91,6 +93,23 @@ struct PeluSettingsScreen: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    private var displaySection: some View {
+        Section {
+            Picker("用量樣式", selection: $cardStyle) {
+                ForEach(UsageCardStyle.allCases, id: \.self) { style in
+                    Text(style.label).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("顯示")
+        } footer: {
+            Text(cardStyle == .rings
+                 ? "外圈是已用額度，藍色內圈是週期已過時間。"
+                 : "進度條上的刻度表示週期已過時間。")
         }
     }
 

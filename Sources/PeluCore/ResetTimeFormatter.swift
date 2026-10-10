@@ -19,4 +19,24 @@ public enum ResetTimeFormatter {
             return "重置於 \(max(minutes, 1))m"
         }
     }
+
+    /// Spelled-out time left, e.g. "2 小時 19 分", "3 天 23 小時", "45 分鐘".
+    /// Nil once the date has passed.
+    public static func remaining(until date: Date, now: Date = Date()) -> String? {
+        let interval = date.timeIntervalSince(now)
+        guard interval > 0 else { return nil }
+
+        let total = Int(interval)
+        let days = total / 86400
+        let hours = (total % 86400) / 3600
+        let minutes = (total % 3600) / 60
+
+        if days > 0 {
+            return hours > 0 ? "\(days) 天 \(hours) 小時" : "\(days) 天"
+        } else if hours > 0 {
+            return minutes > 0 ? "\(hours) 小時 \(minutes) 分" : "\(hours) 小時"
+        } else {
+            return "\(max(minutes, 1)) 分鐘"
+        }
+    }
 }

@@ -18,9 +18,11 @@ public struct PeluAggregateDashboardView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                greetingHero
-                header
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    greetingHero
+                    header
+                }
 
                 TimelineView(.everyMinute) { context in
                     if let display = aggregate.displaySnapshot(at: context.date) {
@@ -54,18 +56,13 @@ public struct PeluAggregateDashboardView: View {
     /// hero without needing extra weight modifiers.
     private var greetingHero: some View {
         TimelineView(.everyMinute) { context in
-            VStack(alignment: .leading, spacing: 6) {
-                Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent(at: context.date)))
-                    .font(.custom("SourceHanSerifTC-Bold", size: 28, relativeTo: .title))
-                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(subheading(at: context.date))
-                    .font(.subheadline)
-                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
+            Text(Greeting.text(for: context.date, usedPercent: busiestUsedPercent(at: context.date)))
+                .font(.custom("SourceHanSerifTC-Bold", size: 26, relativeTo: .title))
+                .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
         }
     }
 
@@ -73,11 +70,6 @@ public struct PeluAggregateDashboardView: View {
     /// cards, so a stale Codex record cannot contradict a newer reset below.
     private func busiestUsedPercent(at now: Date) -> Double? {
         aggregate.displaySnapshot(at: now)?.metrics.compactMap(\.usedPercent).max()
-    }
-
-    private func subheading(at now: Date) -> String {
-        guard let percent = busiestUsedPercent(at: now) else { return "尚無資料" }
-        return "目前最高用量 \(Int(percent.rounded()))%"
     }
 
     /// 5 分鐘沒新資料就視為斷線。TimelineView 每分鐘 tick 一次，所以即使
@@ -94,20 +86,22 @@ public struct PeluAggregateDashboardView: View {
             }()
 
             HStack {
-                if let newest {
-                    let label = disconnected
-                        ? UpdatedAtFormatter.relativeString(from: newest, now: now)
-                        : UpdatedAtFormatter.string(from: newest, now: now)
-                    Text("最後更新 \(label)")
-                        .font(.subheadline)
-                        .foregroundStyle(disconnected
-                            ? Color.red
-                            : PeluTheme.tertiaryText(for: colorScheme))
-                } else {
-                    Text("尚未收到資料")
-                        .font(.subheadline)
-                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+                Group {
+                    if let newest {
+                        let busiest = busiestUsedPercent(at: now).map { "最高 \(Int($0.rounded()))% · " } ?? ""
+                        if disconnected {
+                            Text("\(busiest)\(UpdatedAtFormatter.relativeString(from: newest, now: now))更新")
+                                .foregroundStyle(Color.red)
+                        } else {
+                            Text("\(busiest)\(UpdatedAtFormatter.string(from: newest, now: now)) 更新")
+                        }
+                    } else {
+                        Text("尚未收到資料")
+                    }
                 }
+                .font(.subheadline)
+                .monospacedDigit()
+                .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
                 Spacer()
                 StatusPill(
                     source: aggregate.displaySnapshot(at: now)?.source ?? .demo,

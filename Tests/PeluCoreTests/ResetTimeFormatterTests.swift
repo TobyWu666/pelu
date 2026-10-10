@@ -30,3 +30,12 @@ import Testing
     let thirtySeconds = now.addingTimeInterval(30)
     #expect(ResetTimeFormatter.string(from: thirtySeconds, now: now) == "重置於 1m")
 }
+
+@Test func resetTimeFormatterSpellsOutRemainingTime() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(ResetTimeFormatter.remaining(until: now.addingTimeInterval(30), now: now) == "1 分鐘")
+    #expect(ResetTimeFormatter.remaining(until: now.addingTimeInterval(2 * 3600 + 19 * 60), now: now) == "2 小時 19 分")
+    #expect(ResetTimeFormatter.remaining(until: now.addingTimeInterval(3 * 3600), now: now) == "3 小時")
+    #expect(ResetTimeFormatter.remaining(until: now.addingTimeInterval(3 * 86400 + 23 * 3600), now: now) == "3 天 23 小時")
+    #expect(ResetTimeFormatter.remaining(until: now, now: now) == nil)
+}

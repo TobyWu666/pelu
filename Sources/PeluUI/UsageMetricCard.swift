@@ -1,282 +1,326 @@
 import PeluCore
 import SwiftUI
 
-// MARK: - PeluProgressBar
+// MARK: - QuotaGauge
 
-private struct PeluProgressBar: View {
-    let value: Double            // 0 … 1
-    var tint: Color = .accentColor
-    /// When supplied, renders a 1pt sky-blue line under the main bar showing
-    /// how far through the current cycle we are. Same visual language as the
-    /// weekly bar's cycle indicator.
-    var cycleElapsed: Double? = nil
+/// Usage capsule with a short tick marking how far the window has run —
+/// the same language as the Mac panel's gauge.
+private struct QuotaGauge: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let percent: Double?
+    let elapsed: Double?
+    let height: CGFloat
 
     var body: some View {
-        VStack(spacing: cycleGap) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.secondary.opacity(0.15))
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(.primary.opacity(0.08))
+                if let percent, percent > 0 {
                     Capsule()
-                        .fill(tint)
-                        .frame(width: geo.size.width * min(max(value, 0), 1))
-                        .animation(.easeOut(duration: 0.3), value: value)
+                        .fill(UsageStatus.from(percent: percent).tintColor)
+                        .frame(width: max(height, width * PercentFormatter.progress(from: percent)))
+                }
+                if let elapsed {
+                    Capsule()
+                        .fill(.primary.opacity(0.75))
+                        .frame(width: 2, height: height + 6)
+                        .offset(x: min(max(0, width * elapsed - 1), max(0, width - 2)))
                 }
             }
-            .frame(height: mainBarHeight)
-
-            if let cycleElapsed {
-                GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        Rectangle()
-                            .fill(PeluTheme.sky)
-                            .frame(
-                                width: geo.size.width * min(max(cycleElapsed, 0), 1),
-                                height: cycleLineHeight
-                            )
-                        Spacer(minLength: 0)
-                    }
-                }
-                .frame(height: cycleLineHeight)
-            }
+            .frame(height: height)
+            .frame(maxHeight: .infinity)
         }
+        .frame(height: height + 6)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: percent)
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue(accessibleValue)
     }
 
-    private var mainBarHeight: CGFloat { 10 }
-    private var cycleLineHeight: CGFloat { 1 }
-    private var cycleGap: CGFloat { 3 }
+    private var accessibleValue: String {
+        var value = percent.map { "已用 \(PercentFormatter.string(from: $0))" } ?? "尚無資料"
+        if let elapsed {
+            value += "，週期已過 \(Int(elapsed * 100))%"
+        }
+        return value
+    }
 }
 
-// MARK: - SecondaryBar
+// MARK: - QuotaRing
 
-private struct SecondaryBar: View {
-    let label: String
-    let percent: Double
-    let colorScheme: ColorScheme
-    var outerProgress: Double? = nil
-    var usageTint: Color? = nil
+/// Outer ring is quota used, inner sky ring is how far the window has run,
+/// the percentage sits in the middle — the Mac panel's dual ring, scaled down.
+private struct QuotaRing: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let percent: Double?
+    let elapsed: Double?
+    let prominent: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .frame(width: 46, alignment: .leading)
-            GeometryReader { geo in
-                barContent(width: geo.size.width)
+        ZStack {
+            Circle().stroke(.primary.opacity(0.08), lineWidth: 6)
+            if let percent, percent.isFinite, percent > 0 {
+                Circle()
+                    .trim(from: 0, to: PercentFormatter.progress(from: percent))
+                    .stroke(UsageStatus.from(percent: percent).tintColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             }
-            .frame(height: barContainerHeight)
-            Text(PercentFormatter.string(from: percent))
-                .frame(width: 44, alignment: .trailing)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .font(.caption2.monospacedDigit())
-        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-    }
-
-    @ViewBuilder
-    private func barContent(width: CGFloat) -> some View {
-        let usageWidth = width * min(max(percent / 100, 0), 1)
-
-        VStack(spacing: cycleLineGap) {
-            plainUsageBar(width: usageWidth)
-            // Hair-thin solid blue line under the usage bar, length tracks
-            // how far through the 7-day cycle we are. Subtle, doesn't compete
-            // with the main bar. Same treatment on iOS and macOS.
-            if let outerProgress {
-                let elapsedWidth = width * min(max(outerProgress, 0), 1)
-                HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(PeluTheme.sky)
-                        .frame(width: elapsedWidth, height: cycleLineHeight)
-                    Spacer(minLength: 0)
+            Group {
+                Circle()
+                    .stroke(.primary.opacity(0.06), style: StrokeStyle(lineWidth: 3, dash: elapsed == nil ? [2, 4] : []))
+                if let elapsed {
+                    Circle()
+                        .trim(from: 0, to: min(1, max(0, elapsed)))
+                        .stroke(PeluTheme.sky, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
                 }
             }
+            .padding(9)
+            let weight: Font.Weight = prominent ? .semibold : .medium
+            (Text(percent.map { "\(Int($0.rounded()))" } ?? "--")
+                .font(.system(size: prominent ? 18 : 16, weight: weight, design: .rounded))
+             + Text("%")
+                .font(.system(size: prominent ? 11 : 10, weight: weight, design: .rounded)))
+                .monospacedDigit()
+                .foregroundStyle(prominent ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 12)
         }
+        .padding(3)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: percent)
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue("已用 \(PercentFormatter.string(from: percent))，" + (elapsed.map { "週期已過 \(Int($0 * 100))%" } ?? "週期進度未定"))
     }
-
-    private func plainUsageBar(width: CGFloat) -> some View {
-        let resolvedUsageTint = usageTint ?? .secondary
-
-        return ZStack(alignment: .leading) {
-            Capsule().fill(.secondary.opacity(0.12))
-            Capsule()
-                .fill(resolvedUsageTint.opacity(usageTint == nil ? 0.55 : 0.70))
-                .frame(width: width)
-        }
-        .frame(height: secondaryBarHeight)
-    }
-
-    private var barContainerHeight: CGFloat {
-        outerProgress == nil
-            ? secondaryBarHeight
-            : secondaryBarHeight + cycleLineGap + cycleLineHeight
-    }
-
-    private var cycleLineHeight: CGFloat { 1 }
-    private var cycleLineGap: CGFloat { 3 }
-
-    private var secondaryBarHeight: CGFloat { 6 }
 }
 
 // MARK: - UsageMetricCard
 
+public enum UsageCardStyle: String, CaseIterable, Sendable {
+    case bars
+    case rings
+
+    public static let storageKey = "pelu.ios.cardStyle"
+
+    public var label: String {
+        switch self {
+        case .bars: "條狀"
+        case .rings: "圓圈"
+        }
+    }
+}
+
 struct UsageMetricCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(UsageCardStyle.storageKey) private var style: UsageCardStyle = .bars
 
     let metric: UsageMetric
 
     var body: some View {
         // A CloudKit value may remain cached after its source window resets.
-        // Re-project the whole card every minute, including the headline and
-        // status tint, so it reaches 0% without waiting for a new upload.
+        // Re-project the whole card every minute so it reaches 0% without
+        // waiting for a new upload.
         TimelineView(.periodic(from: Date(), by: 60)) { context in
-            card(metric: metric.effective(at: context.date), now: context.date)
+            let current = metric.effective(at: context.date)
+            Group {
+                switch style {
+                case .bars: barsCard(metric: current, now: context.date)
+                case .rings: ringsCard(metric: current, now: context.date)
+                }
+            }
+            .padding(16)
+            .background(PeluTheme.surface(for: colorScheme))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(PeluTheme.border(for: colorScheme), lineWidth: 1)
+            }
         }
     }
 
-    private func card(metric: UsageMetric, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                #if os(macOS)
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .center, spacing: 8) {
-                        providerIcon
-                        providerTitle
+    // MARK: Rings
+
+    private func ringsCard(metric: UsageMetric, now: Date) -> some View {
+        let stale = stalenessText(measuredAt: metric.measuredAt, now: now)
+        let sharedReset = metric.sharesResetDate && metric.weeklyPercent != nil && stale == nil
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                providerIcon(side: 26)
+                Text(metric.provider.displayName)
+                    .font(.headline)
+                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Group {
+                    if let stale {
+                        staleLabel(stale, estimate: metric.dataSource == .localEstimate)
+                    } else if sharedReset {
+                        Text(resetText(metric.resetDate, now: now))
                     }
                 }
-                #else
-                HStack(alignment: .center, spacing: 10) {
-                    providerIcon
-
-                    providerTitle
-                }
-                #endif
-
-                Spacer()
-
-                Text(PercentFormatter.string(from: metric.usedPercent))
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                .font(.caption)
+                .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+                .lineLimit(1)
             }
 
-            VStack(spacing: 10) {
-                PeluProgressBar(
-                    value: PercentFormatter.progress(from: metric.usedPercent),
-                    tint: metric.status.tintColor,
-                    cycleElapsed: elapsedProgress(
-                        resetDate: metric.resetDate,
-                        durationMins: metric.resolvedPrimaryWindowDurationMins,
+            HStack(spacing: 12) {
+                ringColumn(
+                    title: metric.windowTitle(secondary: false),
+                    percent: metric.usedPercent,
+                    elapsed: elapsed(reset: metric.resetDate, durationMins: metric.resolvedPrimaryWindowDurationMins, now: now),
+                    reset: sharedReset ? nil : .some(metric.resetDate),
+                    prominent: true,
+                    now: now
+                )
+                if let weekly = metric.weeklyPercent {
+                    ringColumn(
+                        title: metric.windowTitle(secondary: true),
+                        percent: weekly,
+                        elapsed: elapsed(reset: metric.weeklyResetDate, durationMins: metric.resolvedSecondaryWindowDurationMins, now: now),
+                        reset: sharedReset ? nil : .some(metric.weeklyResetDate),
+                        prominent: false,
                         now: now
                     )
-                )
-
-                if let weekly = metric.weeklyPercent {
-                    SecondaryBar(
-                        label: metric.windowTitle(secondary: true, compact: true),
-                        percent: weekly,
-                        colorScheme: colorScheme,
-                        outerProgress: elapsedProgress(
-                            resetDate: metric.weeklyResetDate,
-                            durationMins: metric.resolvedSecondaryWindowDurationMins,
-                            now: now
-                        )
-                    )
                 }
             }
 
-            HStack(alignment: .top) {
-                HStack(spacing: 6) {
-                    Label(metric.status.label, systemImage: "circle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(metric.status.tintColor, metric.status.tintColor)
+            if metric.usedPercent == nil, let note = metric.note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+            }
+        }
+    }
 
-                    // Both the "估算" badge and the "更新於 X 分鐘前" text
-                    // surface together only when the measurement is
-                    // older than 5 min. Fresh values stay silent.
-                    if isStale(measuredAt: metric.measuredAt, now: now) {
-                        if metric.dataSource == .localEstimate {
-                            Text("估算")
-                                .font(.system(size: 10, weight: .semibold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(
-                                    Capsule().fill(PeluTheme.amber.opacity(0.18))
-                                )
-                                .foregroundStyle(PeluTheme.amber)
-                        }
-                        if let staleText = stalenessText(measuredAt: metric.measuredAt, now: now) {
-                            Text(staleText).foregroundStyle(PeluTheme.amber)
-                        }
-                    }
+    /// `reset` is nil when the card header already shows a shared reset.
+    private func ringColumn(title: String, percent: Double?, elapsed: Double?, reset: Date??, prominent: Bool, now: Date) -> some View {
+        HStack(spacing: 10) {
+            QuotaRing(percent: percent, elapsed: elapsed, prominent: prominent)
+                .frame(width: 70, height: 70)
+                .accessibilityLabel("\(title) 配額")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(PeluTheme.secondaryText(for: colorScheme))
+                if let reset {
+                    Text(reset.flatMap { ResetTimeFormatter.remaining(until: $0, now: now) }.map { "\($0)後" }
+                         ?? (reset == nil ? "重置時間未定" : "已重置"))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
                 }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-                Spacer()
+    // MARK: Bars
 
-                VStack(alignment: .trailing, spacing: 2) {
-                    if metric.sharesResetDate, let d = metric.resetDate {
-                        Text(ResetTimeFormatter.string(from: d, now: now))
-                    } else {
-                        if let d = metric.resetDate {
-                            Text("\(metric.windowTitle(secondary: false)) \(ResetTimeFormatter.string(from: d, now: now))")
-                        }
-                        if let d = metric.weeklyResetDate {
-                            Text("\(metric.windowTitle(secondary: true)) \(ResetTimeFormatter.string(from: d, now: now))")
-                        }
-                    }
-                    if metric.resetDate == nil && metric.weeklyResetDate == nil {
-                        Text("重置時間未定")
-                    }
+    private func barsCard(metric: UsageMetric, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                providerIcon(side: 34)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(metric.provider.displayName)
+                        .font(.headline)
+                        .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                        .lineLimit(1)
+                    detailLine(metric: metric, now: now)
+                }
+                Spacer(minLength: 8)
+                Text(PercentFormatter.string(from: metric.usedPercent))
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(PeluTheme.primaryText(for: colorScheme))
+                    .accessibilityLabel("\(metric.windowTitle(secondary: false)) 已用 \(PercentFormatter.string(from: metric.usedPercent))")
+            }
+
+            QuotaGauge(
+                percent: metric.usedPercent,
+                elapsed: elapsed(reset: metric.resetDate, durationMins: metric.resolvedPrimaryWindowDurationMins, now: now),
+                height: 8
+            )
+            .padding(.top, 14)
+
+            if let weekly = metric.weeklyPercent {
+                secondaryRow(metric: metric, percent: weekly, now: now)
+                    .padding(.top, 12)
+            }
+        }
+    }
+
+    /// One quiet line under the name: what the big number measures and when
+    /// it resets. Stale data takes the line over in amber instead.
+    @ViewBuilder
+    private func detailLine(metric: UsageMetric, now: Date) -> some View {
+        Group {
+            if let staleText = stalenessText(measuredAt: metric.measuredAt, now: now) {
+                staleLabel(staleText, estimate: metric.dataSource == .localEstimate)
+            } else if metric.usedPercent == nil, let note = metric.note {
+                Text(note)
+            } else {
+                Text("\(metric.windowTitle(secondary: false)) · \(resetText(metric.resetDate, now: now))")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+    }
+
+    private func secondaryRow(metric: UsageMetric, percent: Double, now: Date) -> some View {
+        HStack(spacing: 10) {
+            Text(metric.windowTitle(secondary: true, compact: true))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(PeluTheme.secondaryText(for: colorScheme))
+                .frame(width: 34, alignment: .leading)
+            QuotaGauge(
+                percent: percent,
+                elapsed: elapsed(reset: metric.weeklyResetDate, durationMins: metric.resolvedSecondaryWindowDurationMins, now: now),
+                height: 5
+            )
+            Text(PercentFormatter.string(from: percent))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(PeluTheme.secondaryText(for: colorScheme))
+                .frame(minWidth: 38, alignment: .trailing)
+            // Fixed column (even when the reset is shared and shown above) so
+            // the bars line up from card to card.
+            Group {
+                if !metric.sharesResetDate, let reset = metric.weeklyResetDate {
+                    Text(ResetTimeFormatter.remaining(until: reset, now: now).map { "\($0)後" } ?? "已重置")
                 }
             }
             .font(.caption)
+            .monospacedDigit()
             .foregroundStyle(PeluTheme.tertiaryText(for: colorScheme))
-            .padding(.top, 6)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(PeluTheme.surface(for: colorScheme))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(PeluTheme.border(for: colorScheme), lineWidth: 1)
-        }
-    }
-
-    private var providerTitle: some View {
-        Text(metric.provider.displayName)
-            .font(providerTitleFont)
-            .foregroundStyle(PeluTheme.secondaryText(for: colorScheme))
             .lineLimit(1)
-            .minimumScaleFactor(0.68)
+            .minimumScaleFactor(0.8)
+            .frame(width: 84, alignment: .trailing)
+        }
+        .accessibilityElement(children: .combine)
     }
 
-    private var providerTitleFont: Font {
-        #if os(macOS)
-        return .title3.weight(.semibold)
-        #else
-        return .headline
-        #endif
+    private func resetText(_ date: Date?, now: Date) -> String {
+        guard let date else { return "重置時間未定" }
+        return ResetTimeFormatter.remaining(until: date, now: now).map { "\($0)後重置" } ?? "已重置"
     }
 
-    private func elapsedProgress(resetDate: Date?, durationMins: Int, now: Date) -> Double? {
-        guard let resetDate, durationMins > 0 else { return nil }
-        let windowDuration = TimeInterval(durationMins * 60)
-        let startDate = resetDate.addingTimeInterval(-windowDuration)
-        return clampedProgress(now.timeIntervalSince(startDate) / windowDuration)
+    private func elapsed(reset: Date?, durationMins: Int, now: Date) -> Double? {
+        guard let reset, durationMins > 0, reset > now else { return nil }
+        return min(1, max(0, 1 - reset.timeIntervalSince(now) / (Double(durationMins) * 60)))
     }
 
-    private func clampedProgress(_ value: Double) -> Double {
-        min(max(value, 0), 1)
-    }
-
-    /// Returns "更新於 X 分鐘前" once the measurement is ≥ 5 min old. Below
-    /// that we treat the value as fresh enough — Codex RPC polls every 60s
-    /// in active mode, and even the Claude/jsonl path is realistic within
-    /// 5 min of the last interaction. Matches plan §13's stale threshold.
+    /// "更新於 X 分鐘前" once the measurement passes `UsageMetric.staleAfter`;
+    /// fresh values stay silent.
     private func stalenessText(measuredAt: Date?, now: Date) -> String? {
-        guard let measuredAt, isStale(measuredAt: measuredAt, now: now) else { return nil }
-        let elapsed = now.timeIntervalSince(measuredAt)
-        let minutes = Int(elapsed / 60)
+        guard let measuredAt, now.timeIntervalSince(measuredAt) >= UsageMetric.staleAfter else { return nil }
+        let minutes = Int(now.timeIntervalSince(measuredAt) / 60)
         let hours = minutes / 60
         if hours >= 1 {
             return hours >= 24 ? "更新於 \(hours / 24) 天前" : "更新於 \(hours) 小時前"
@@ -284,33 +328,39 @@ struct UsageMetricCard: View {
         return "更新於 \(minutes) 分鐘前"
     }
 
-    /// True when the measurement is old enough that the user should question
-    /// whether it reflects current reality. Drives both the "估算"
-    /// badge and the "更新於" text — fresh data shows neither.
-    private func isStale(measuredAt: Date?, now: Date) -> Bool {
-        guard let measuredAt else { return false }
-        return now.timeIntervalSince(measuredAt) >= UsageMetric.staleAfter
+    private func staleLabel(_ text: String, estimate: Bool) -> some View {
+        HStack(spacing: 5) {
+            if estimate {
+                Text("估算")
+                    .font(.system(size: 10, weight: .semibold))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(PeluTheme.amber.opacity(0.18)))
+            }
+            Text(text)
+        }
+        .foregroundStyle(PeluTheme.amber)
     }
 
     @ViewBuilder
-    private var providerIcon: some View {
+    private func providerIcon(side: CGFloat) -> some View {
         #if os(iOS)
         if metric.provider == .claudeCode {
-            AnimatedGIFView(name: "ClaudeGIF", size: CGSize(width: 44, height: 44))
-                .frame(width: 44, height: 44)
+            AnimatedGIFView(name: "ClaudeGIF", size: CGSize(width: side, height: side))
+                .frame(width: side, height: side)
                 .fixedSize()
                 .clipped()
         } else {
             Image(metric.provider.assetName)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 44, height: 44)
+                .frame(width: side, height: side)
         }
         #else
         Image(metric.provider.assetName)
             .resizable()
             .scaledToFit()
-            .frame(width: 28, height: 28)
+            .frame(width: side, height: side)
         #endif
     }
 }

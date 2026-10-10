@@ -37,8 +37,7 @@ struct PeluDashboardScreen: View {
                         .padding()
                 }
             }
-            .navigationTitle("Pelu")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .task(id: pollingNonce) {
                 if pollingNonce == 0 {
                     loadCachedAggregate()
