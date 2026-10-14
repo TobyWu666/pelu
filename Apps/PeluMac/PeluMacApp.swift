@@ -2,251 +2,6 @@ import PeluCore
 import PeluUI
 import SwiftUI
 
-// MARK: - CodexJSONLReader
-
-/// Reads the latest token_count event from ~/.codex/sessions/YYYY/MM/DD/*.jsonl
-/// and ~/.codex/archived_sessions/ to extract Codex rate limit percentages.
-struct CodexJSONLReader {
-    private let codexDir: URL
-
-    init() {
-        codexDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
-    }
-
-    func readLatestMetric() -> UsageMetric {
-        guard let match = latestTokenCountMatch() else {
-            return UsageMetric(provider: .codex, usedPercent: nil, note: "今日無 Codex 使用紀錄")
-        }
-        return metric(from: match.payload, measuredAt: match.timestamp)
-    }
-
-    func latestTokenCountFileURL() -> URL? {
-        latestTokenCountMatch()?.fileURL
-    }
-
-    /// All jsonl files modified within `withinHours` hours — these are the
-    /// sessions that could still receive appends. We watch each one so a
-    /// background terminal's writes trigger refresh, not just the currently
-    /// active session.
-    func recentlyActiveJSONLFiles(withinHours: Double = 24) -> [URL] {
-        let cutoff = Date().addingTimeInterval(-withinHours * 3600)
-        return candidateJSONLFiles().filter { url in
-            guard let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            else { return false }
-            return mod >= cutoff
-        }
-    }
-
-    /// Sum the latest `total_token_usage` from every jsonl modified within
-    /// the last `withinHours`. Each session contributes its single latest
-    /// token_count event (the session's running cumulative at that point);
-    /// the aggregate is the running cumulative across all active sessions,
-    /// which `PeluHistoryScreen` feeds into `CodexPricing.estimateUSD` and
-    /// passes through the same day-over-day delta logic as Claude's
-    /// `cost.total_cost_usd`. Returns nil when no jsonl in the window
-    /// has a usable token_count event.
-    func summedTokenUsage(withinHours: Double = 24) -> CodexTokenUsage? {
-        let cutoff = Date().addingTimeInterval(-withinHours * 3600)
-        let activeFiles = candidateJSONLFiles().filter { url in
-            guard let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            else { return false }
-            return mod >= cutoff
-        }
-
-        var total = CodexTokenUsage.zero
-        var anyContribution = false
-
-        for fileURL in activeFiles {
-            guard let match = latestTokenCountMatch(in: fileURL),
-                  let info = match.payload["info"] as? [String: Any],
-                  let totals = info["total_token_usage"] as? [String: Any]
-            else { continue }
-
-            // Codex writes these as integers, but Foundation surfaces JSON
-            // numbers as NSNumber — read via Int first, fall back to Double
-            // for safety against any future shape changes.
-            let input = (totals["input_tokens"] as? Int) ?? Int(totals["input_tokens"] as? Double ?? 0)
-            let cached = (totals["cached_input_tokens"] as? Int) ?? Int(totals["cached_input_tokens"] as? Double ?? 0)
-            let output = (totals["output_tokens"] as? Int) ?? Int(totals["output_tokens"] as? Double ?? 0)
-            let sessionUsage = CodexTokenUsage(
-                inputTokens: input,
-                cachedInputTokens: cached,
-                outputTokens: output
-            )
-            guard !sessionUsage.isEmpty else { continue }
-            total = total.adding(sessionUsage)
-            anyContribution = true
-        }
-
-        return anyContribution ? total : nil
-    }
-
-    func currentSessionsDirectory(now: Date = Date()) -> URL {
-        let cal = Calendar.current
-        let y = cal.component(.year, from: now)
-        let m = cal.component(.month, from: now)
-        let d = cal.component(.day, from: now)
-        return codexDir.appendingPathComponent(
-            String(format: "sessions/%d/%02d/%02d", y, m, d)
-        )
-    }
-
-    private struct TokenCountMatch {
-        let timestamp: Date
-        let fileURL: URL
-        let payload: [String: Any]
-    }
-
-    private func latestTokenCountMatch() -> TokenCountMatch? {
-        let jsonlFiles = candidateJSONLFiles()
-
-        var newest: TokenCountMatch?
-        for fileURL in jsonlFiles {
-            guard let match = latestTokenCountMatch(in: fileURL) else { continue }
-            if newest == nil || match.timestamp > newest!.timestamp {
-                newest = match
-            }
-        }
-
-        return newest
-    }
-
-    private func candidateJSONLFiles() -> [URL] {
-        // Codex rate_limits 是 provider 定義的滾動式 window；昨天最後一筆 event 的 rate_limits
-        // 在 reset 前仍代表當前 quota。所以掃最近 8 天，找 modification date 最新的 jsonl。
-        let now = Date()
-        let cal = Calendar.current
-        let lookbackDays = 8
-        let earliest = cal.date(byAdding: .day, value: -lookbackDays, to: now) ?? now
-
-        var jsonlFiles: [URL] = []
-
-        // sessions/YYYY/MM/DD/*.jsonl — 列出最近幾天的目錄
-        for dayOffset in 0..<lookbackDays {
-            guard let date = cal.date(byAdding: .day, value: -dayOffset, to: now) else { continue }
-            let y = cal.component(.year, from: date)
-            let m = cal.component(.month, from: date)
-            let d = cal.component(.day, from: date)
-            let dir = codexDir.appendingPathComponent(
-                String(format: "sessions/%d/%02d/%02d", y, m, d)
-            )
-            if let files = try? FileManager.default.contentsOfDirectory(
-                at: dir,
-                includingPropertiesForKeys: [.contentModificationDateKey]
-            ) {
-                jsonlFiles += files.filter { $0.pathExtension == "jsonl" }
-            }
-        }
-
-        // archived_sessions/*.jsonl — 只要 modification date 在 lookback window 內
-        let archivedDir = codexDir.appendingPathComponent("archived_sessions")
-        if let files = try? FileManager.default.contentsOfDirectory(
-            at: archivedDir,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        ) {
-            let recent = files.filter { url -> Bool in
-                guard url.pathExtension == "jsonl",
-                      let attrs = try? url.resourceValues(forKeys: [.contentModificationDateKey]),
-                      let mod = attrs.contentModificationDate else { return false }
-                return mod >= earliest
-            }
-            jsonlFiles += recent
-        }
-
-        return jsonlFiles
-    }
-
-    private func latestTokenCountMatch(in fileURL: URL) -> TokenCountMatch? {
-        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return nil }
-        let fileModifiedAt = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-        var latest: TokenCountMatch?
-
-        for line in content.split(whereSeparator: \.isNewline) {
-            guard let data = String(line).data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  (obj["type"] as? String) == "event_msg",
-                  let payload = obj["payload"] as? [String: Any],
-                  (payload["type"] as? String) == "token_count"
-            else { continue }
-            let timestamp = (obj["timestamp"] as? String).flatMap(Self.parseCodexTimestamp) ?? fileModifiedAt
-            let match = TokenCountMatch(timestamp: timestamp, fileURL: fileURL, payload: payload)
-            // Use `>=` so when timestamps collide (e.g. burst of events in the
-            // same millisecond, or all-fallback-to-fileMtime) the later event
-            // in the file wins — JSONL order is chronological by construction.
-            if let current = latest, match.timestamp < current.timestamp { continue }
-            latest = match
-        }
-        return latest
-    }
-
-    private static func parseCodexTimestamp(_ string: String) -> Date? {
-        // Codex writes ISO-8601 with fractional seconds (e.g.
-        // "2026-05-21T09:01:40.976Z"). The default ISO8601DateFormatter
-        // rejects the `.976` — bumping formatOptions fixes that.
-        // Without this every event silently falls back to file mtime, all
-        // matches in a file land on the same timestamp, and the in-file
-        // ">" comparison keeps the FIRST event instead of the latest.
-        if let date = Self.fractionalFormatter.date(from: string) { return date }
-        return Self.plainFormatter.date(from: string)
-    }
-
-    // ISO8601DateFormatter is documented thread-safe; `nonisolated(unsafe)`
-    // tells Swift 6 strict concurrency to trust that.
-    nonisolated(unsafe) private static let fractionalFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    nonisolated(unsafe) private static let plainFormatter = ISO8601DateFormatter()
-
-    private func metric(from payload: [String: Any], measuredAt: Date) -> UsageMetric {
-        let rateLimits = payload["rate_limits"] as? [String: Any]
-        let primary = rateLimits?["primary"] as? [String: Any]
-        let secondary = rateLimits?["secondary"] as? [String: Any]
-
-        let rawPrimary = primary?["used_percent"] as? Double
-        let resetDate = (primary?["resets_at"] as? Double).map { Date(timeIntervalSince1970: $0) }
-        let rawWeekly = secondary?["used_percent"] as? Double
-        let weeklyResetDate = (secondary?["resets_at"] as? Double).map { Date(timeIntervalSince1970: $0) }
-        let primaryDurationMins = Self.windowDurationMins(from: primary)
-        let secondaryDurationMins = Self.windowDurationMins(from: secondary)
-
-        // 若 reset 時間已過代表 window 已滾動但 user 沒新 event，當前實際 quota 是 0
-        let now = Date()
-        let primaryPercent: Double? = {
-            guard let v = rawPrimary else { return nil }
-            if let r = resetDate, r < now { return 0 }
-            return v
-        }()
-        let weeklyPercent: Double? = {
-            guard let v = rawWeekly else { return nil }
-            if let r = weeklyResetDate, r < now { return 0 }
-            return v
-        }()
-
-        return UsageMetric(
-            provider: .codex,
-            usedPercent: primaryPercent,
-            weeklyPercent: weeklyPercent,
-            primaryWindowDurationMins: primaryDurationMins,
-            secondaryWindowDurationMins: secondaryDurationMins,
-            resetDate: resetDate,
-            weeklyResetDate: weeklyResetDate,
-            dataSource: .localEstimate,
-            measuredAt: measuredAt
-        )
-    }
-
-    private static func windowDurationMins(from window: [String: Any]?) -> Int? {
-        let keys = ["window_duration_mins", "window_minutes", "windowDurationMins"]
-        for key in keys {
-            if let value = window?[key] as? NSNumber { return value.intValue }
-        }
-        return nil
-    }
-}
-
 // MARK: - UsageMonitor
 
 /// Reads ~/.claude/usag-status.json and ~/.codex/sessions JSONL files,
@@ -289,14 +44,13 @@ final class UsageMonitor: @unchecked Sendable {
         clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     )
     private let codexReader = CodexJSONLReader()
-    /// Serial queue for refresh work. The previous `.global(qos: .utility)`
-    /// was concurrent — when init's first refresh raced with the provider's
-    /// onUpdate-triggered second refresh, the slower (jsonl) task could
-    /// dispatch its main-thread write *after* the faster (RPC) one, leaving
-    /// the UI on the localEstimate metric and surfacing the "估算" badge.
-    private let refreshQueue = DispatchQueue(label: "org.tobywu.pelu.refresh", qos: .utility)
+    /// Keep refreshes serial and coalesce bursts of file/provider updates.
+    /// At most one pass runs and one followup waits; starts are at least 1s apart.
+    private let refreshScheduler = CoalescingRefreshScheduler(
+        queue: DispatchQueue(label: "org.tobywu.pelu.refresh", qos: .utility, autoreleaseFrequency: .workItem)
+    )
     private let historyStore = MacUsageHistoryStore()
-    /// Owned by `refreshQueue`. Loaded once so a refresh doesn't re-read the
+    /// Owned by the serial refresh queue. Loaded once so a refresh doesn't re-read the
     /// whole history file; an unreadable file starts a fresh history.
     private var recordedHistory: MacUsageHistory?
     private let codexQuotaProvider = CodexQuotaProvider(
@@ -306,10 +60,8 @@ final class UsageMonitor: @unchecked Sendable {
         )
     )
     private var fileSource: DispatchSourceFileSystemObject?
-    /// Per-file FSEvent watchers keyed by absolute path. We watch every
-    /// recently-active Codex jsonl, not just the latest one, so a write in
-    /// a background terminal triggers refresh immediately instead of waiting
-    /// for the 60s timer.
+    /// Watch at most 128 recently modified Codex files for immediate updates.
+    /// The 60s timer still reads totals from all active sessions.
     private var codexFileSources: [String: DispatchSourceFileSystemObject] = [:]
     private var codexDirectorySource: DispatchSourceFileSystemObject?
     private var watchedCodexDirectoryPath: String?
@@ -384,101 +136,102 @@ final class UsageMonitor: @unchecked Sendable {
     }
 
     func refresh() {
-        refreshQueue.async { [weak self] in
-            guard let self else { return }
+        refreshScheduler.request { [weak self] in self?.performRefresh() }
+    }
 
-            self.claudeUsageClient.refreshIfDue()
-            let hookMetric: UsageMetric
-            let claudeModifiedAt = try? self.claudeFilePath.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            if let data = try? Data(contentsOf: self.claudeFilePath),
-               let parsed = try? self.claudeParser.parse(data: data, fileModifiedAt: claudeModifiedAt) {
-                hookMetric = parsed
-            } else {
-                hookMetric = UsageMetric(
-                    provider: .claudeCode,
-                    usedPercent: nil,
-                    note: "Claude status JSON 尚未可讀"
-                )
-            }
-            var claudeMetric = ClaudeUsageAPIParser.merge(
-                api: self.claudeUsageClient.latestMetric(),
-                hook: hookMetric,
-                desktop: self.claudeDesktopParser.read()
+    private func performRefresh() {
+        self.claudeUsageClient.refreshIfDue()
+        let hookMetric: UsageMetric
+        let claudeModifiedAt = try? self.claudeFilePath.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        if let data = try? Data(contentsOf: self.claudeFilePath),
+           let parsed = try? self.claudeParser.parse(data: data, fileModifiedAt: claudeModifiedAt) {
+            hookMetric = parsed
+        } else {
+            hookMetric = UsageMetric(
+                provider: .claudeCode,
+                usedPercent: nil,
+                note: "Claude status JSON 尚未可讀"
             )
-            if self.claudeUsageClient.credentialState == .expired,
-               claudeMetric.measuredAt.map({ Date().timeIntervalSince($0) >= UsageMetric.staleAfter }) ?? true {
-                claudeMetric = claudeMetric.withNote("Claude Code 登入已過期，在終端機執行一次 claude 即可更新")
-            }
+        }
+        var claudeMetric = ClaudeUsageAPIParser.merge(
+            api: self.claudeUsageClient.latestMetric(),
+            hook: hookMetric,
+            desktop: self.claudeDesktopParser.read()
+        )
+        if self.claudeUsageClient.credentialState == .expired,
+           claudeMetric.measuredAt.map({ Date().timeIntervalSince($0) >= UsageMetric.staleAfter }) ?? true {
+            claudeMetric = claudeMetric.withNote("Claude Code 登入已過期，在終端機執行一次 claude 即可更新")
+        }
 
-            // Prefer app-server quota while it is fresh. If RPC has been
-            // stale for five minutes and JSONL has a newer observation, use
-            // that estimate until the provider reconnects.
-            let codexMetric: UsageMetric
-            if let snapshot = self.codexQuotaProvider.latestSnapshot() {
-                let official = snapshot.asUsageMetric()
-                let officialIsStale = Date().timeIntervalSince(snapshot.fetchedAt) >= 300
-                if officialIsStale {
-                    let localEstimate = self.codexReader.readLatestMetric()
-                    if let localMeasuredAt = localEstimate.measuredAt,
-                       localMeasuredAt > snapshot.fetchedAt {
-                        codexMetric = localEstimate
-                    } else {
-                        codexMetric = official
-                    }
+        // Prefer app-server quota while it is fresh. If RPC has been
+        // stale for five minutes and JSONL has a newer observation, use
+        // that estimate until the provider reconnects.
+        let codexLocalSnapshot = self.codexReader.readSnapshot()
+        let codexMetric: UsageMetric
+        if let snapshot = self.codexQuotaProvider.latestSnapshot() {
+            let official = snapshot.asUsageMetric()
+            let officialIsStale = Date().timeIntervalSince(snapshot.fetchedAt) >= 300
+            if officialIsStale {
+                let localEstimate = codexLocalSnapshot.metric
+                if let localMeasuredAt = localEstimate.measuredAt,
+                   localMeasuredAt > snapshot.fetchedAt {
+                    codexMetric = localEstimate
                 } else {
                     codexMetric = official
                 }
             } else {
-                codexMetric = self.codexReader.readLatestMetric()
+                codexMetric = official
             }
-            let activeCodexFiles = self.codexReader.recentlyActiveJSONLFiles()
-            let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
+        } else {
+            codexMetric = codexLocalSnapshot.metric
+        }
+        let watchedCodexFiles = codexLocalSnapshot.watchedFileURLs
+        let codexSessionsDirectory = self.codexReader.currentSessionsDirectory()
 
-            // Codex RPC doesn't expose raw token counts, so we always pull
-            // them from JSONL (sum of latest `total_token_usage` across all
-            // sessions active in the last 24h). This drives the history
-            // screen's USD estimate; percentages still come from whichever
-            // source `codexMetric` was just resolved from.
-            let codexTokens = self.codexReader.summedTokenUsage()
-            let codexMetricWithTokens = codexMetric.attachingTokenUsage(codexTokens)
+        // Codex RPC doesn't expose raw token counts, so we always pull
+        // them from JSONL (sum of latest `total_token_usage` across all
+        // sessions active in the last 24h). This drives the history
+        // screen's USD estimate; percentages still come from whichever
+        // source `codexMetric` was just resolved from.
+        let codexTokens = codexLocalSnapshot.tokenUsage
+        let codexMetricWithTokens = codexMetric.attachingTokenUsage(codexTokens)
 
-            var metrics = [claudeMetric, codexMetricWithTokens]
-            if self.cursorClient.isAvailable {
-                self.cursorClient.refreshIfDue()
-                metrics.append(self.cursorClient.currentMetric())
+        var metrics = [claudeMetric, codexMetricWithTokens]
+        if self.cursorClient.isAvailable {
+            self.cursorClient.refreshIfDue()
+            metrics.append(self.cursorClient.currentMetric())
+        }
+        if self.grokBotClient.isAvailable {
+            self.grokBotClient.refreshIfDue()
+            if let grokBot = self.grokBotClient.currentMetric() { metrics.append(grokBot) }
+        }
+        let snap = UsageSnapshot(
+            generatedAt: Date(),
+            source: .local,
+            metrics: metrics
+        )
+        let isFirstLoad = self.recordedHistory == nil
+        var history = self.recordedHistory ?? (try? self.historyStore.load()) ?? MacUsageHistory()
+        var historyError: String?
+        let historyChanged = history.record(snap)
+        if historyChanged {
+            do {
+                try self.historyStore.save(history)
+            } catch {
+                historyError = "歷史資料無法寫入，請確認本機儲存空間與權限。"
             }
-            if self.grokBotClient.isAvailable {
-                self.grokBotClient.refreshIfDue()
-                if let grokBot = self.grokBotClient.currentMetric() { metrics.append(grokBot) }
-            }
-            let snap = UsageSnapshot(
-                generatedAt: Date(),
-                source: .local,
-                metrics: metrics
-            )
-            let isFirstLoad = self.recordedHistory == nil
-            var history = self.recordedHistory ?? (try? self.historyStore.load()) ?? MacUsageHistory()
-            var historyError: String?
-            let historyChanged = history.record(snap)
-            if historyChanged {
-                do {
-                    try self.historyStore.save(history)
-                } catch {
-                    historyError = "歷史資料無法寫入，請確認本機儲存空間與權限。"
-                }
-            }
-            self.recordedHistory = history
-            let updatedHistory = historyChanged || isFirstLoad ? history : nil
-            let updatedHistoryError = historyError
-            DispatchQueue.main.async {
-                if let updatedHistory { self.history = updatedHistory }
-                // Keep a save error visible until a later save succeeds.
-                if historyChanged { self.historyError = updatedHistoryError }
-                self.snapshot = snap
-                self.updateCodexFileWatchers(fileURLs: activeCodexFiles)
-                self.updateCodexDirectoryWatcher(directoryURL: codexSessionsDirectory)
-                self.rescheduleResetTimers(for: snap)
-            }
+        }
+        self.recordedHistory = history
+        let updatedHistory = historyChanged || isFirstLoad ? history : nil
+        let updatedHistoryError = historyError
+        DispatchQueue.main.async {
+            if let updatedHistory { self.history = updatedHistory }
+            // Keep a save error visible until a later save succeeds.
+            if historyChanged { self.historyError = updatedHistoryError }
+            self.snapshot = snap
+            self.updateCodexFileWatchers(fileURLs: watchedCodexFiles)
+            self.updateCodexDirectoryWatcher(directoryURL: codexSessionsDirectory)
+            self.rescheduleResetTimers(for: snap)
         }
     }
 
@@ -537,7 +290,7 @@ final class UsageMonitor: @unchecked Sendable {
             guard let self else { return }
             // Claude Code's statusLine hook writes atomically (rename / unlink + create),
             // which invalidates our file descriptor. On rename/delete we must reopen.
-            let flags = source.data
+            guard let flags = self.fileSource?.data else { return }
             if flags.contains(.rename) || flags.contains(.delete) {
                 self.fileSource?.cancel()
                 self.fileSource = nil
@@ -579,7 +332,7 @@ final class UsageMonitor: @unchecked Sendable {
             )
             source.setEventHandler { [weak self] in
                 guard let self else { return }
-                let flags = source.data
+                guard let flags = self.codexFileSources[newPath]?.data else { return }
                 if flags.contains(.rename) || flags.contains(.delete) {
                     self.codexFileSources[newPath]?.cancel()
                     self.codexFileSources.removeValue(forKey: newPath)
@@ -617,7 +370,8 @@ final class UsageMonitor: @unchecked Sendable {
         )
         source.setEventHandler { [weak self] in
             guard let self else { return }
-            let flags = source.data
+            guard self.watchedCodexDirectoryPath == directoryURL.path,
+                  let flags = self.codexDirectorySource?.data else { return }
             if flags.contains(.rename) || flags.contains(.delete) {
                 self.codexDirectorySource?.cancel()
                 self.codexDirectorySource = nil
