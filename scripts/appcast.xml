@@ -14,6 +14,24 @@
     -->
 
     <item>
+      <title>Pelu 1.0.14</title>
+      <pubDate>Wed, 14 Oct 2026 05:44:02 +0000</pubDate>
+      <sparkle:version>15</sparkle:version>
+      <sparkle:shortVersionString>1.0.14</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h3>修正</h3>
+        <ul>
+          <li>降低讀取 Codex 紀錄時的記憶體用量，紀錄檔很大時不會再佔用大量記憶體（感謝 Daniel 貢獻）</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/TobyWu666/pelu-releases/releases/download/v1.0.14/PeluMac.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="/7g8zLZGg/dKg4Az9kpVXmfT1QpiSpZlS1vkfIbjrwZXoBrc1T08u3AqmFGjdMUZln25u4sRweTojY0l0JGaCQ==" length="3031678" />
+    </item>
+
+    <item>
       <title>Pelu 1.0.13</title>
       <pubDate>Mon, 12 Oct 2026 06:51:45 +0000</pubDate>
       <sparkle:version>14</sparkle:version>
